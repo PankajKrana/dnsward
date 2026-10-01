@@ -1,0 +1,15 @@
+:root { color-scheme: light dark; --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e; --muted: #6e7781; }
+body { font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; padding: 12px 14px; width: 270px; }
+header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+h1 { font-size: 15px; margin: 0; }
+.state { display: flex; align-items: center; gap: 8px; font-weight: 600; margin-bottom: 10px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+.state.ok .dot { background: var(--ok); } .state.warn .dot { background: var(--warn); } .state.bad .dot { background: var(--bad); }
+dl { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; margin: 0 0 12px; }
+dt { color: var(--muted); } dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+#site { border-top: 1px solid color-mix(in srgb, currentColor 15%, transparent); padding-top: 10px; }
+#host { font-weight: 600; margin-bottom: 6px; word-break: break-all; }
+button { font: inherit; padding: 6px 10px; border-radius: 6px; border: 1px solid color-mix(in srgb, currentColor 25%, transparent); background: transparent; cursor: pointer; width: 100%; }
+button.link { border: 0; padding: 0; width: auto; color: var(--muted); text-decoration: underline; }
+.hint { color: var(--muted); font-size: 12px; }
+footer { margin-top: 10px; text-align: right; }

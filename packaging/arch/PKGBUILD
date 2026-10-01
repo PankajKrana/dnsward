@@ -1,0 +1,46 @@
+# Maintainer: AdBlock maintainers <maintainers@example.com>
+pkgname=adblock
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="System-wide ad and tracker blocking (filtering DNS resolver + browser extensions)"
+arch=('x86_64' 'aarch64')
+url="https://github.com/OWNER/adblock"
+license=('MIT')
+depends=('systemd' 'gcc-libs')
+makedepends=('cargo' 'clang')
+backup=('etc/adblock/config.toml')
+install=adblock.install
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')  # replace with the release tarball checksum
+
+prepare() {
+    cd "$pkgname-$pkgver"
+    export RUSTUP_TOOLCHAIN=stable
+    cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+    cd "$pkgname-$pkgver"
+    export RUSTUP_TOOLCHAIN=stable CARGO_TARGET_DIR=target
+    cargo build --frozen --release -p adblock-cli
+}
+
+check() {
+    cd "$pkgname-$pkgver"
+    cargo test --frozen --workspace --lib
+}
+
+package() {
+    cd "$pkgname-$pkgver"
+    install -Dm0755 target/release/adblock "$pkgdir/usr/bin/adblock"
+    ln -s adblock "$pkgdir/usr/bin/adblock-native-host"
+    install -dm0755 "$pkgdir/usr/share/adblock/filters"
+    install -m0644 filters/*.txt "$pkgdir/usr/share/adblock/filters/"
+    install -dm0755 "$pkgdir/usr/lib/systemd/system"
+    sed 's#/usr/local/bin/adblock#/usr/bin/adblock#g' platforms/linux/adblock.service > "$pkgdir/usr/lib/systemd/system/adblock.service"
+    install -Dm0644 crates/adblock-config/src/default-config.toml "$pkgdir/etc/adblock/config.toml"
+    install -Dm0644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    echo 'u adblock - "AdBlock DNS service" /var/lib/adblock' | install -Dm0644 /dev/stdin "$pkgdir/usr/lib/sysusers.d/adblock.conf"
+    echo 'd /var/lib/adblock 0755 root root -
+d /var/lib/adblock/data 0755 adblock adblock -' | install -Dm0644 /dev/stdin "$pkgdir/usr/lib/tmpfiles.d/adblock.conf"
+}

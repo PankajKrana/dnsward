@@ -1,0 +1,67 @@
+! Title: AdBlock YouTube compatibility rules
+! Description: YouTube-specific rules, kept apart from the generic lists so
+!   they can change without rebuilding AdBlock. YouTube changes often; to
+!   receive fixes quickly, point the `youtube` list's `url` at a maintained
+!   copy of this file (see docs/youtube.md).
+! Expires: 1 day
+! License: MIT
+!
+! How it works:
+!   1. Network rules block ad-specific endpoints only. Video playback hosts
+!      (googlevideo.com) are never blocked: ads and content share them.
+!   2. Scriptlets remove ad placement data from player responses before the
+!      player reads it (json-prune*), using built-in, reviewed extension
+!      code. The rules below only supply property names.
+!   3. Cosmetic rules hide ad containers in the page layout.
+!   No DRM, authentication or access-control mechanism is touched.
+!
+! ---- Network: ad and ad-measurement endpoints ----
+||youtube.com/api/stats/ads^
+||youtube.com/pagead/
+||youtube.com/ptracking^
+||youtube.com/get_midroll_
+||youtube.com/api/stats/qoe?*adformat
+||googleads.g.doubleclick.net^
+||static.doubleclick.net^
+||imasdk.googleapis.com/js/sdkloader/ima3.js$domain=youtube.com|youtube-nocookie.com
+!
+! ---- Scriptlets: strip ad placements from player data ----
+! Initial page data (inline script) and later navigations (fetch/XHR).
+youtube.com,youtube-nocookie.com,youtubekids.com##+js(set-constant, ytInitialPlayerResponse.playerAds, undefined)
+youtube.com,youtube-nocookie.com,youtubekids.com##+js(set-constant, ytInitialPlayerResponse.adPlacements, undefined)
+youtube.com,youtube-nocookie.com,youtubekids.com##+js(set-constant, ytInitialPlayerResponse.adSlots, undefined)
+youtube.com,youtube-nocookie.com,youtubekids.com##+js(json-prune, playerResponse.adPlacements playerResponse.playerAds playerResponse.adSlots adPlacements playerAds adSlots)
+youtube.com,youtube-nocookie.com,youtubekids.com##+js(json-prune-fetch-response, playerAds adPlacements adSlots playerResponse.playerAds playerResponse.adPlacements playerResponse.adSlots, , propsToMatch, /\/(player|get_watch)\b/)
+youtube.com,youtube-nocookie.com,youtubekids.com##+js(json-prune-xhr-response, playerAds adPlacements adSlots playerResponse.playerAds playerResponse.adPlacements playerResponse.adSlots, , propsToMatch, /\/(player|get_watch)\b/)
+! Feed / search ads delivered as renderer objects.
+youtube.com##+js(json-prune-fetch-response, onResponseReceivedEndpoints.*.appendContinuationItemsAction.continuationItems.*.adSlotRenderer, , propsToMatch, /\/browse\b/)
+!
+! ---- Cosmetic: ad containers (desktop) ----
+youtube.com##ytd-ad-slot-renderer
+youtube.com##ytd-in-feed-ad-layout-renderer
+youtube.com##ytd-promoted-sparkles-web-renderer
+youtube.com##ytd-promoted-video-renderer
+youtube.com##ytd-display-ad-renderer
+youtube.com##ytd-compact-promoted-video-renderer
+youtube.com##ytd-companion-slot-renderer
+youtube.com##ytd-action-companion-ad-renderer
+youtube.com##ytd-banner-promo-renderer
+youtube.com##ytd-video-masthead-ad-v3-renderer
+youtube.com##ytd-primetime-promo-renderer
+youtube.com##ytd-statement-banner-renderer
+youtube.com##ytd-search-pyv-renderer
+youtube.com##ytd-player-legacy-desktop-watch-ads-renderer
+youtube.com###masthead-ad
+youtube.com###player-ads
+youtube.com###panels > ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-ads"]
+youtube.com##ytd-rich-item-renderer:has(> #content > ytd-ad-slot-renderer)
+youtube.com##ytd-rich-section-renderer:has(ytd-statement-banner-renderer)
+youtube.com##.ytp-ad-overlay-container
+youtube.com##.ytp-ad-overlay-slot
+!
+! ---- Cosmetic: ad containers (mobile web) ----
+m.youtube.com##ad-slot-renderer
+m.youtube.com##ytm-promoted-sparkles-web-renderer
+m.youtube.com##ytm-companion-ad-renderer
+m.youtube.com##ytm-promoted-video-renderer
+m.youtube.com##.ytm-promoted-sparkles-text-search-renderer

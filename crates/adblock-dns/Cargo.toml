@@ -1,0 +1,19 @@
+[package]
+name = "adblock-dns"
+description = "Filtering DNS resolver (UDP/TCP listener, DoH and plain upstreams, cache)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+adblock-config.workspace = true
+adblock-filter.workspace = true
+adblock-stats.workspace = true
+hickory-proto.workspace = true
+reqwest.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }

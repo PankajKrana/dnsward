@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-14, macos-13]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --locked
+      - run: cargo test --workspace --locked
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Browser extension tests
+        run: |
+          for f in browser/common/*.js; do node --check "$f"; done
+          node --test "browser/tests/*.test.js"
+      - name: Shell scripts
+        run: for f in installers/*.sh packaging/*.sh packaging/deb/*.sh browser/build.sh; do sh -n "$f"; done
+
+  shellcheck:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: shellcheck -s sh installers/*.sh packaging/make-dist.sh packaging/deb/build-deb.sh browser/build.sh
+
+  linux-install:
+    name: install + enable on a systemd host
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install from source
+        run: ./installers/install.sh
+      - name: Verify
+        run: |
+          adblock status
+          adblock doctor || true
+          getent hosts doubleclick.net | grep -q '0.0.0.0'
+          getent hosts example.com
+          getent hosts adblock-probe.test | grep -q 127.0.0.209
+          sudo adblock allow doubleclick.net
+          sudo resolvectl flush-caches || true
+          ! getent hosts doubleclick.net | grep -q '0.0.0.0'
+      - name: Disable restores DNS
+        run: |
+          sudo adblock disable
+          ! getent hosts adblock-probe.test
+          getent hosts example.com
+      - name: Uninstall
+        run: ./installers/uninstall.sh --purge && ! command -v adblock
+
+  fuzz:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: cargo install cargo-fuzz --locked
+      - run: cd fuzz && cargo fuzz run parse_line -- -max_total_time=120
+      - run: cd fuzz && cargo fuzz run engine -- -max_total_time=120
+
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

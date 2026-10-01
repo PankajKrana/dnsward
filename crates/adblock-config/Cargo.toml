@@ -1,0 +1,16 @@
+[package]
+name = "adblock-config"
+description = "Configuration schema, validation and platform paths for AdBlock"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+adblock-filter.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+libc.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>AdBlock</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <img src="icons/32.png" alt="" width="20" height="20">
+    <h1>AdBlock</h1>
+  </header>
+  <section id="state" class="state unknown">
+    <span class="dot"></span><span id="state-text">Connecting…</span>
+  </section>
+  <dl id="numbers" hidden>
+    <dt>Blocked today</dt><dd id="blocked">–</dd>
+    <dt>Filter rules</dt><dd id="rules">–</dd>
+    <dt>DNS filtering</dt><dd id="dns">–</dd>
+  </dl>
+  <section id="site" hidden>
+    <div id="host"></div>
+    <button id="toggle" type="button">Pause on this site</button>
+  </section>
+  <p id="hint" class="hint" hidden></p>
+  <footer><button id="resync" type="button" class="link">Refresh rules</button></footer>
+  <script src="popup.js"></script>
+</body>
+</html>

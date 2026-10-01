@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+# On removal (not upgrade), restore DNS settings and stop the service.
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+    /usr/bin/adblock disable >/dev/null 2>&1 || systemctl disable --now adblock.service >/dev/null 2>&1 || true
+    /usr/bin/adblock browser uninstall --system >/dev/null 2>&1 || true
+fi
+exit 0

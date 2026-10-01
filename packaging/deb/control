@@ -1,0 +1,14 @@
+Package: adblock
+Version: @VERSION@
+Architecture: @ARCH@
+Maintainer: AdBlock maintainers <maintainers@example.com>
+Section: net
+Priority: optional
+Depends: systemd, adduser
+Homepage: https://github.com/OWNER/adblock
+Description: System-wide ad and tracker blocking
+ AdBlock blocks advertising and tracking domains for the whole system with a
+ local filtering DNS resolver (DNS-over-HTTPS upstreams) and provides browser
+ extensions for in-page filtering. No telemetry; statistics stay local.
+ .
+ After installation, run "sudo adblock enable" to turn protection on.

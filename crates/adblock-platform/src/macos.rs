@@ -1,0 +1,314 @@
+//! macOS: launchd service management and DNS configuration via
+//! `networksetup`.
+//!
+//! macOS resolver settings cannot specify a port, so the daemon listens on
+//! port 53. Since macOS 10.14, binding ports below 1024 does not require
+//! root, so the LaunchDaemon still runs as the unprivileged `_adblock` user.
+
+use crate::cmd::{run, stdout, succeeds};
+use crate::{
+    DnsBackup, DnsConfigState, LAUNCHD_LABEL, LogSource, Platform, SERVICE_USER_MACOS,
+    ServiceStatus, resolver_addresses,
+};
+use anyhow::{Context, Result, bail};
+use std::net::SocketAddr;
+use std::path::{Path, PathBuf};
+
+const LAUNCHCTL: &str = "/bin/launchctl";
+const NETWORKSETUP: &str = "/usr/sbin/networksetup";
+const PLIST: &str = "/Library/LaunchDaemons/com.adblock.daemon.plist";
+
+#[derive(Debug, Default)]
+pub struct MacOs;
+
+fn target() -> String {
+    format!("system/{LAUNCHD_LABEL}")
+}
+
+fn loaded() -> bool {
+    succeeds(LAUNCHCTL, &["print", &target()])
+}
+
+/// All network services (including disabled ones, so that enabling one
+/// later does not silently bypass filtering).
+pub fn network_services() -> Result<Vec<String>> {
+    let out = stdout(NETWORKSETUP, &["-listallnetworkservices"])?;
+    Ok(parse_services(&out))
+}
+
+fn parse_services(out: &str) -> Vec<String> {
+    out.lines()
+        .skip_while(|l| l.starts_with("An asterisk"))
+        .map(|l| l.trim_start_matches('*').trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect()
+}
+
+fn parse_dns_servers(out: &str) -> Vec<String> {
+    if out.contains("aren't any DNS Servers") {
+        return Vec::new();
+    }
+    out.lines()
+        .map(str::trim)
+        .filter(|l| l.parse::<std::net::IpAddr>().is_ok())
+        .map(String::from)
+        .collect()
+}
+
+fn set_dns(service: &str, servers: &[String]) -> Result<()> {
+    let mut args: Vec<&str> = vec!["-setdnsservers", service];
+    if servers.is_empty() {
+        args.push("Empty"); // revert to DHCP-provided servers
+    } else {
+        args.extend(servers.iter().map(String::as_str));
+    }
+    run(NETWORKSETUP, &args)?;
+    Ok(())
+}
+
+impl Platform for MacOs {
+    fn name(&self) -> &'static str {
+        "macOS"
+    }
+
+    fn service_file(&self) -> PathBuf {
+        PathBuf::from(PLIST)
+    }
+
+    fn service_status(&self) -> ServiceStatus {
+        if !Path::new(PLIST).exists() {
+            return ServiceStatus::NotInstalled;
+        }
+        match stdout(LAUNCHCTL, &["print", &target()]) {
+            Ok(out) if out.lines().any(|l| l.trim() == "state = running") => ServiceStatus::Running,
+            _ => ServiceStatus::Stopped,
+        }
+    }
+
+    fn service_start(&self) -> Result<()> {
+        if !Path::new(PLIST).exists() {
+            bail!("the adblock service is not installed; run the installer first");
+        }
+        run(LAUNCHCTL, &["enable", &target()])?;
+        if loaded() {
+            run(LAUNCHCTL, &["kickstart", &target()])?;
+        } else {
+            run(LAUNCHCTL, &["bootstrap", "system", PLIST])
+                .context("launchctl could not load the AdBlock daemon")?;
+        }
+        Ok(())
+    }
+
+    fn service_stop(&self) -> Result<()> {
+        if loaded() {
+            run(LAUNCHCTL, &["bootout", &target()])?;
+        }
+        // Prevent launchd from starting it at boot.
+        let _ = run(LAUNCHCTL, &["disable", &target()]);
+        Ok(())
+    }
+
+    fn service_restart(&self) -> Result<()> {
+        if loaded() {
+            run(LAUNCHCTL, &["kickstart", "-k", &target()])?;
+            Ok(())
+        } else {
+            self.service_start()
+        }
+    }
+
+    fn plan_dns(&self, listen: &[SocketAddr]) -> Result<DnsBackup> {
+        let addrs = resolver_addresses(listen);
+        if addrs.is_empty() {
+            bail!("dns.listen has no loopback address the system resolver could use");
+        }
+        if addrs.iter().any(|a| a.port() != 53) {
+            bail!("macOS resolver settings cannot use a custom port; dns.listen must use port 53");
+        }
+        let mut services = Vec::new();
+        for service in network_services()? {
+            let out = stdout(NETWORKSETUP, &["-getdnsservers", &service])?;
+            let mut previous = parse_dns_servers(&out);
+            // If a stale AdBlock configuration is present, treat it as DHCP.
+            previous.retain(|s| !addrs.iter().any(|a| a.ip().to_string() == *s));
+            services.push((service, previous));
+        }
+        if services.is_empty() {
+            bail!("no network services found");
+        }
+        Ok(DnsBackup::MacOs { services })
+    }
+
+    fn apply_dns(&self, plan: &DnsBackup, listen: &[SocketAddr]) -> Result<()> {
+        let DnsBackup::MacOs { services } = plan else {
+            bail!("non-macOS DNS backup on macOS")
+        };
+        let servers: Vec<String> = resolver_addresses(listen)
+            .iter()
+            .map(|a| a.ip().to_string())
+            .collect();
+        for (service, _) in services {
+            set_dns(service, &servers).with_context(|| format!("cannot set DNS for {service}"))?;
+        }
+        self.flush_dns_cache();
+        Ok(())
+    }
+
+    fn restore_dns(&self, backup: &DnsBackup) -> Result<()> {
+        let DnsBackup::MacOs { services } = backup else {
+            bail!("non-macOS DNS backup on macOS")
+        };
+        let mut errors = Vec::new();
+        let existing = network_services().unwrap_or_default();
+        for (service, previous) in services {
+            if !existing.contains(service) {
+                continue; // service was removed meanwhile
+            }
+            if let Err(e) = set_dns(service, previous) {
+                errors.push(format!("{service}: {e}"));
+            }
+        }
+        self.flush_dns_cache();
+        if !errors.is_empty() {
+            bail!("could not restore DNS for: {}", errors.join("; "));
+        }
+        Ok(())
+    }
+
+    fn dns_config_state(&self, listen: &[SocketAddr]) -> DnsConfigState {
+        let ours: Vec<String> = resolver_addresses(listen)
+            .iter()
+            .map(|a| a.ip().to_string())
+            .collect();
+        let Ok(services) = network_services() else {
+            return DnsConfigState::Inactive("cannot list network services".into());
+        };
+        let mut missing = Vec::new();
+        for service in services {
+            let servers = stdout(NETWORKSETUP, &["-getdnsservers", &service])
+                .map(|o| parse_dns_servers(&o))
+                .unwrap_or_default();
+            if !servers.iter().any(|s| ours.contains(s)) {
+                missing.push(service);
+            }
+        }
+        if missing.is_empty() {
+            DnsConfigState::Active
+        } else {
+            DnsConfigState::Inactive(format!("not configured for: {}", missing.join(", ")))
+        }
+    }
+
+    fn flush_dns_cache(&self) {
+        let _ = run("/usr/bin/dscacheutil", &["-flushcache"]);
+        let _ = run("/usr/bin/killall", &["-HUP", "mDNSResponder"]);
+    }
+
+    fn log_source(&self, paths: &adblock_config::Paths, _follow: bool, _lines: usize) -> LogSource {
+        LogSource::File(
+            paths
+                .log_file
+                .clone()
+                .unwrap_or_else(|| PathBuf::from("/Library/Logs/AdBlock/adblock.log")),
+        )
+    }
+
+    fn install_service(&self, exe: &Path) -> Result<()> {
+        const TEMPLATE: &str = include_str!("../../../platforms/macos/com.adblock.daemon.plist");
+        const NEWSYSLOG: &str = include_str!("../../../platforms/macos/newsyslog-adblock.conf");
+        if crate::user_ids(SERVICE_USER_MACOS).is_none() {
+            create_service_account()?;
+        }
+        let (uid, gid) = crate::user_ids(SERVICE_USER_MACOS)
+            .context("service account missing after creation")?;
+        let base = Path::new("/Library/Application Support/AdBlock");
+        adblock_config::fs::ensure_dir(base, 0o755)?;
+        for dir in [base.join("data"), PathBuf::from("/Library/Logs/AdBlock")] {
+            adblock_config::fs::ensure_dir(&dir, 0o755)?;
+            crate::chown(&dir, uid, gid)?;
+        }
+        crate::ensure_default_config(&base.join("config.toml"))?;
+        adblock_config::fs::write_atomic(
+            Path::new("/etc/newsyslog.d/adblock.conf"),
+            NEWSYSLOG.as_bytes(),
+            0o644,
+        )?;
+        let plist = crate::render_service_template(TEMPLATE, exe)?;
+        adblock_config::fs::write_atomic(Path::new(PLIST), plist.as_bytes(), 0o644)?;
+        crate::chown(Path::new(PLIST), 0, 0)?;
+        Ok(())
+    }
+
+    fn remove_service(&self) -> Result<()> {
+        if loaded() {
+            let _ = run(LAUNCHCTL, &["bootout", &target()]);
+        }
+        let _ = run(LAUNCHCTL, &["enable", &target()]); // clear the disabled override
+        if Path::new(PLIST).exists() {
+            std::fs::remove_file(PLIST).context("cannot remove LaunchDaemon plist")?;
+        }
+        let user_path = format!("/Users/{SERVICE_USER_MACOS}");
+        let group_path = format!("/Groups/{SERVICE_USER_MACOS}");
+        if succeeds("/usr/bin/dscl", &[".", "-read", &user_path]) {
+            let _ = run("/usr/bin/dscl", &[".", "-delete", &user_path]);
+        }
+        if succeeds("/usr/bin/dscl", &[".", "-read", &group_path]) {
+            let _ = run("/usr/bin/dscl", &[".", "-delete", &group_path]);
+        }
+        Ok(())
+    }
+}
+
+/// Creates the hidden `_adblock` user and group with the first free ID in
+/// the 400-499 system range.
+fn create_service_account() -> Result<()> {
+    let used = |kind: &str, attr: &str| -> Result<Vec<u32>> {
+        let out = stdout("/usr/bin/dscl", &[".", "-list", kind, attr])?;
+        Ok(out
+            .lines()
+            .filter_map(|l| l.split_whitespace().last()?.parse().ok())
+            .collect())
+    };
+    let users = used("/Users", "UniqueID")?;
+    let groups = used("/Groups", "PrimaryGroupID")?;
+    let id = (400..500)
+        .find(|id| !users.contains(id) && !groups.contains(id))
+        .context("no free system user ID in 400-499")?
+        .to_string();
+    let group = format!("/Groups/{SERVICE_USER_MACOS}");
+    let user = format!("/Users/{SERVICE_USER_MACOS}");
+    let dscl =
+        |args: &[&str]| run("/usr/bin/dscl", &[&[".", "-create"][..], args].concat()).map(|_| ());
+    dscl(&[&group])?;
+    dscl(&[&group, "PrimaryGroupID", &id])?;
+    dscl(&[&group, "RealName", "AdBlock"])?;
+    dscl(&[&group, "Password", "*"])?;
+    dscl(&[&user])?;
+    dscl(&[&user, "UniqueID", &id])?;
+    dscl(&[&user, "PrimaryGroupID", &id])?;
+    dscl(&[&user, "UserShell", "/usr/bin/false"])?;
+    dscl(&[&user, "NFSHomeDirectory", "/var/empty"])?;
+    dscl(&[&user, "RealName", "AdBlock"])?;
+    dscl(&[&user, "Password", "*"])?;
+    dscl(&[&user, "IsHidden", "1"])?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parsing() {
+        let out = "An asterisk (*) denotes that a network service is disabled.\nWi-Fi\n*Thunderbolt Bridge\nUSB 10/100/1000 LAN\n";
+        assert_eq!(
+            parse_services(out),
+            vec!["Wi-Fi", "Thunderbolt Bridge", "USB 10/100/1000 LAN"]
+        );
+        assert!(parse_dns_servers("There aren't any DNS Servers set on Wi-Fi.").is_empty());
+        assert_eq!(
+            parse_dns_servers("1.1.1.1\n2606:4700::1111\n"),
+            vec!["1.1.1.1", "2606:4700::1111"]
+        );
+    }
+}

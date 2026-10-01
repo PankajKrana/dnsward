@@ -1,0 +1,91 @@
+! Title: AdBlock baseline
+! Description: Small seed list so blocking works before the first filter
+!   update. The full protection comes from the downloaded lists (EasyList,
+!   EasyPrivacy, uBlock filters, Peter Lowe's list). Only long-established
+!   advertising/tracking hostnames that are not needed for page function
+!   belong here.
+! License: Public domain
+!
+! --- Advertising ---
+||doubleclick.net^
+||googlesyndication.com^
+||googleadservices.com^
+||adservice.google.com^
+||pagead2.googlesyndication.com^
+||amazon-adsystem.com^
+||adnxs.com^
+||adsrvr.org^
+||criteo.com^
+||criteo.net^
+||taboola.com^
+||outbrain.com^
+||pubmatic.com^
+||rubiconproject.com^
+||openx.net^
+||casalemedia.com^
+||advertising.com^
+||adform.net^
+||smartadserver.com^
+||yieldmo.com^
+||media.net^
+||revcontent.com^
+||mgid.com^
+||zedo.com^
+||adroll.com^
+||bidswitch.net^
+||indexww.com^
+||sharethrough.com^
+||teads.tv^
+||33across.com^
+||moatads.com^
+||serving-sys.com^
+||ads.yahoo.com^
+||ads.linkedin.com^
+||ads.twitter.com^
+||ads-api.tiktok.com^
+||ad.doubleclick.net^
+||adsafeprotected.com^
+||adcolony.com^
+||unityads.unity3d.com^
+||applovin.com^
+||inmobi.com^
+!
+! --- Tracking / analytics ---
+||google-analytics.com^
+||googletagservices.com^
+||analytics.google.com^
+||app-measurement.com^
+||scorecardresearch.com^
+||quantserve.com^
+||quantcount.com^
+||chartbeat.com^
+||chartbeat.net^
+||mixpanel.com^
+||hotjar.com^
+||hotjar.io^
+||mouseflow.com^
+||fullstory.com^
+||crazyegg.com^
+||newrelic.com^
+||nr-data.net^
+||bat.bing.com^
+||clarity.ms^
+||pixel.facebook.com^
+||an.facebook.com^
+||analytics.tiktok.com^
+||sc-static.net^
+||omtrdc.net^
+||demdex.net^
+||everesttech.net^
+||krxd.net^
+||bluekai.com^
+||exelator.com^
+||rlcdn.com^
+||agkn.com^
+||tapad.com^
+||adsymptotic.com^
+||segment.io^
+||branch.io^
+||appsflyer.com^
+||adjust.com^
+||kochava.com^
