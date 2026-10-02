@@ -57,17 +57,22 @@ fn write_message(output: &mut impl Write, value: &impl Serialize) -> Result<()> 
     Ok(())
 }
 
-/// Socket of the system daemon, falling back to a per-user daemon.
+/// Socket of the system daemon, falling back to a per-user daemon (honoring
+/// a `[paths] socket` override in the per-user configuration).
 fn socket_path() -> PathBuf {
     let system = Paths::system().socket;
     if system.exists() {
         return system;
     }
-    Paths::user()
-        .map(|p| p.socket)
-        .ok()
-        .filter(|p| p.exists())
-        .unwrap_or(system)
+    if let Ok(mut user) = Paths::user() {
+        if let Ok(config) = adblock_config::Config::load(&user.config_file) {
+            user.apply_overrides(&config.paths);
+        }
+        if user.socket.exists() {
+            return user.socket;
+        }
+    }
+    system
 }
 
 /// Processes one decoded message.
