@@ -1,13 +1,13 @@
-# Homebrew formula. Publish in a tap (e.g. OWNER/homebrew-tap) and install with:
-#   brew install OWNER/tap/adblock
+# Homebrew formula. Publish in a tap (e.g. PankajKrana/homebrew-tap) and install with:
+#   brew install PankajKrana/tap/adblock
 #   sudo adblock enable
 class Adblock < Formula
   desc "System-wide ad and tracker blocking (filtering DNS + browser extensions)"
-  homepage "https://github.com/OWNER/adblock"
-  url "https://github.com/OWNER/adblock/archive/refs/tags/v0.1.0.tar.gz"
+  homepage "https://github.com/PankajKrana/dnsward"
+  url "https://github.com/PankajKrana/dnsward/archive/refs/tags/v0.1.0.tar.gz"
   sha256 "REPLACE_WITH_RELEASE_TARBALL_SHA256"
   license "MIT"
-  head "https://github.com/OWNER/adblock.git", branch: "main"
+  head "https://github.com/PankajKrana/dnsward.git", branch: "main"
 
   depends_on "rust" => :build
   depends_on :macos

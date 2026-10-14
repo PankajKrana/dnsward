@@ -5,7 +5,7 @@ Version:        %{_version}
 Release:        1%{?dist}
 Summary:        System-wide ad and tracker blocking
 License:        MIT
-URL:            https://github.com/OWNER/adblock
+URL:            https://github.com/PankajKrana/dnsward
 Requires:       systemd
 Requires(pre):  shadow-utils
 %{?systemd_requires}

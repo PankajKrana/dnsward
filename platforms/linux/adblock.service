@@ -1,6 +1,6 @@
 [Unit]
 Description=AdBlock ad and tracker blocking DNS service
-Documentation=https://github.com/OWNER/adblock
+Documentation=https://github.com/PankajKrana/dnsward
 After=network.target
 Wants=network.target
 # Start before name lookups are needed by other services.

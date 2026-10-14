@@ -16,7 +16,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT"
-repository = "https://github.com/OWNER/adblock"
+repository = "https://github.com/PankajKrana/dnsward"
 
 [workspace.dependencies]
 adblock-filter = { path = "crates/adblock-filter" }

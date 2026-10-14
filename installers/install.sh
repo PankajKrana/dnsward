@@ -1,18 +1,18 @@
 #!/bin/sh
 # AdBlock installer for Linux (x86_64, arm64) with systemd.
 #
-#   curl -fsSL https://example.com/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/PankajKrana/dnsward/main/installers/install.sh | sh
 #   ./installers/install.sh                 # from a source checkout (builds with cargo)
 #
 # Environment:
-#   ADBLOCK_REPO=owner/adblock    GitHub repository for release downloads
+#   ADBLOCK_REPO=owner/repo       GitHub repository for release downloads
 #   ADBLOCK_VERSION=0.1.0         release to install (default: latest)
 #   ADBLOCK_FROM_SOURCE=1         force building from source
 #   ADBLOCK_NO_ENABLE=1           install but do not turn protection on
 #   ADBLOCK_PREFIX=/usr/local     installation prefix
 set -eu
 
-REPO="${ADBLOCK_REPO:-OWNER/adblock}"
+REPO="${ADBLOCK_REPO:-PankajKrana/dnsward}"
 VERSION="${ADBLOCK_VERSION:-latest}"
 PREFIX="${ADBLOCK_PREFIX:-/usr/local}"
 BIN_DIR="$PREFIX/bin"

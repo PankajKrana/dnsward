@@ -54,24 +54,24 @@ EasyPrivacy, uBlock filters, and Peter Lowe's list.
 
 **Linux**
 ```sh
-curl -fsSL https://example.com/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/PankajKrana/dnsward/main/installers/install.sh | sh
 ```
 
 **macOS**
 ```sh
-curl -fsSL https://example.com/install-macos.sh | sh
+curl -fsSL https://raw.githubusercontent.com/PankajKrana/dnsward/main/installers/install-macos.sh | sh
 ```
 
 **From a source checkout** (needs Rust from <https://rustup.rs>):
 ```sh
-git clone https://github.com/OWNER/adblock && cd adblock
+git clone https://github.com/PankajKrana/dnsward && cd dnsward
 ./installers/install.sh          # Linux
 ./installers/install-macos.sh    # macOS
 ```
 
 **Homebrew** (once the tap is published):
 ```sh
-brew install OWNER/tap/adblock
+brew install PankajKrana/tap/adblock
 sudo adblock enable
 ```
 

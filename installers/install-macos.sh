@@ -1,17 +1,17 @@
 #!/bin/sh
 # AdBlock installer for macOS 11+ (Intel and Apple Silicon).
 #
-#   curl -fsSL https://example.com/install-macos.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/PankajKrana/dnsward/main/installers/install-macos.sh | sh
 #   ./installers/install-macos.sh           # from a source checkout (builds with cargo)
 #
 # Environment:
-#   ADBLOCK_REPO=owner/adblock    GitHub repository for release downloads
+#   ADBLOCK_REPO=owner/repo       GitHub repository for release downloads
 #   ADBLOCK_VERSION=0.1.0         release to install (default: latest)
 #   ADBLOCK_FROM_SOURCE=1         force building from source
 #   ADBLOCK_NO_ENABLE=1           install but do not turn protection on
 set -eu
 
-REPO="${ADBLOCK_REPO:-OWNER/adblock}"
+REPO="${ADBLOCK_REPO:-PankajKrana/dnsward}"
 VERSION="${ADBLOCK_VERSION:-latest}"
 PREFIX="${ADBLOCK_PREFIX:-/usr/local}"
 BIN_DIR="$PREFIX/bin"

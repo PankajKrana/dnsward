@@ -93,9 +93,12 @@ targets, and attaches tarballs (`packaging/make-dist.sh`), `.deb` and `.rpm`
 packages, checksums, and the installers to a GitHub release. Then update the
 `sha256` in `packaging/homebrew/adblock.rb` and `packaging/arch/PKGBUILD`.
 
-Before the first release, replace the `OWNER/adblock` placeholders (installer
-`ADBLOCK_REPO` default, workspace `repository`, packaging files) with the
-real repository, and `example.com` in the README with your download host.
+The repository is `PankajKrana/dnsward`: the installers' `ADBLOCK_REPO` default,
+the workspace `repository`, the packaging files and the README install commands
+all point at it. Before the first release, publish a GitHub release (the
+installers download its archives) and fill in the `sha256` values in
+`packaging/homebrew/adblock.rb` and `packaging/arch/PKGBUILD`. The Homebrew tap
+`PankajKrana/homebrew-tap` named in the formula does not exist yet.
 
 ## Code layout
 
