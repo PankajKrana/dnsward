@@ -10,6 +10,8 @@
 //!   `$removeparam=name`, `$redirect=` to packaged neutral resources)
 //! * cosmetic filters (`##`, `#@#`, entity hostnames, standard CSS in `#?#`)
 //! * scriptlet filters (`##+js(...)`) referencing built-in scriptlets by name
+//! * procedural cosmetic filters (`:has-text()`, `:matches-css()`, `:xpath()`,
+//!   `:upward()`, `:remove()`) with validated, typed arguments
 //!
 //! Unsupported syntax is skipped and counted, never approximated in a way
 //! that could break sites.
@@ -20,6 +22,7 @@ pub mod engine;
 pub mod export;
 pub mod network;
 pub mod parser;
+pub mod procedural;
 pub mod request;
 pub mod resources;
 
@@ -28,6 +31,7 @@ pub use engine::{
     ScriptletRule, UrlVerdict,
 };
 pub use parser::{ListFormat, Rule, parse_line};
+pub use procedural::Procedural;
 pub use request::{Request, ResourceType, ResourceTypes};
 
 /// Why a line could not be turned into a rule.

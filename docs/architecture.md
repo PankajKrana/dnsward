@@ -50,6 +50,17 @@ and swap the Unix socket for a named pipe in `fuck-ads-core::control`.
   selectors are keyed by the class or id they require, so a page only
   receives selectors relevant to the tokens it actually contains. Selectors
   that can't be keyed are sent once per frame.
+* **Procedural cosmetic filters.** Selectors that need more than CSS
+  (`site.com##.card:has-text(Sponsored)`, `:matches-css()`, `:xpath()`,
+  `:upward()`, `:remove()`, with native CSS before, between and after the
+  operators) are parsed into typed steps (`procedural.rs`): operators are a
+  fixed set, and each argument becomes plain text, a bounded regular
+  expression (no backreferences, lookaround or nested quantifiers), an XPath
+  expression, a number or a validated CSS selector. They are site-specific
+  only (a generic one would walk every page) and are returned with the
+  once-per-frame cosmetic request; the extension's `procedural.js` evaluates
+  them in the page, in time-boxed slices, as the DOM changes. Other
+  procedural operators are still skipped and counted as unsupported.
 * **Precedence.** `$important` block > `$important` exception > page
   (`$document`) exception > exception > block. User allow/block lists sit
   above all filter lists. Hosts FuckAds needs to function (DoH upstreams,

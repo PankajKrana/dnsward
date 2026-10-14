@@ -4,6 +4,9 @@
  * Collects the class and id names present in the page and asks the
  * background script for matching cosmetic filters. Only these tokens and
  * the frame's hostname are sent, and only to the local FuckAds service.
+ *
+ * The first reply may also carry procedural filters for this site
+ * (:has-text() and friends); procedural.js evaluates them against the page.
  */
 (() => {
   'use strict';
@@ -14,9 +17,39 @@
   const seenIds = new Set();
   const MAX_TOKENS = 20000;
 
+  // Procedural filters: evaluate once the service has sent them, then again
+  // (debounced, time-boxed) as the page changes.
+  let proceduralStarted = false;
+  const startProcedural = (rules) => {
+    if (proceduralStarted || typeof fuckAdsProcedural === 'undefined') return;
+    proceduralStarted = true;
+    const runner = fuckAdsProcedural.createRunner(rules, fuckAdsProcedural.domEnv(document, window));
+    let timer = null;
+    const slice = () => {
+      timer = null;
+      if (!runner.run().complete) timer = setTimeout(slice, 50);
+    };
+    const schedule = () => {
+      if (timer === null) timer = setTimeout(slice, 250);
+    };
+    // Attribute changes are not observed: hiding an element changes its style
+    // attribute, which would retrigger this forever.
+    new MutationObserver(schedule).observe(document, { childList: true, subtree: true, characterData: true });
+    slice();
+  };
+
   const send = (classes, ids, complex) => {
     try {
-      api.runtime.sendMessage({ type: 'cosmetic', classes, ids, complex }).catch?.(() => {});
+      const reply = api.runtime.sendMessage({ type: 'cosmetic', classes, ids, complex });
+      if (complex && reply && typeof reply.then === 'function') {
+        reply
+          .then((r) => {
+            if (r && Array.isArray(r.procedural) && r.procedural.length > 0) startProcedural(r.procedural);
+          })
+          .catch(() => {});
+      } else {
+        reply?.catch?.(() => {});
+      }
     } catch (e) {
       /* extension reloaded */
     }

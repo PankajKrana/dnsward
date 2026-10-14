@@ -350,9 +350,14 @@ previous settings exactly.
 * **VPNs** often install their own DNS settings while connected.
 * **Safari** cannot use the cross-browser extension without a signed Xcode
   app. See [browser/safari](browser/safari/README.md).
-* **Procedural cosmetic filters** (`:has-text()` and similar), `$redirect`,
-  `$removeparam`, `$csp`, and HTML filtering are not implemented. Rules that
-  use them are skipped rather than approximated.
+* **Some filter syntax is skipped, not approximated.** Procedural cosmetic
+  filters work for the common operators (`:has-text()`, `:matches-css()`,
+  `:xpath()`, `:upward()`, `:remove()`, site-specific only); rarer ones
+  (`:style()`, `:matches-attr()`, `:if()`, nested procedural `:has()`/`:not()`)
+  are not implemented. Also unsupported: `$csp`, `$redirect-rule`, `$denyallow`
+  and other less common network options, HTML filtering, and scriptlets or
+  redirect resources FuckAds does not ship. On a typical set of default lists
+  about 3% of rule lines are skipped; `fuck-ads rules` shows the counts.
 * On Chrome without *Allow User Scripts*, scriptlets are injected when
   navigation commits. This usually, but not always, happens before page
   scripts run.

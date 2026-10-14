@@ -9,6 +9,7 @@
 
 use crate::ParseError;
 use crate::domain::DomainConstraint;
+use crate::procedural::{self, Procedural};
 
 /// The scriptlets implemented by the browser extension. Filter lists may only
 /// reference these names (or their aliases).
@@ -41,6 +42,9 @@ pub enum CosmeticAction {
     /// Run a named, built-in scriptlet with string arguments. An exception
     /// with an empty name disables all scriptlets for the matching sites.
     Scriptlet { name: String, args: Vec<String> },
+    /// A selector that needs the extension to evaluate it in the page
+    /// (`:has-text()` and friends). Always site-specific.
+    Procedural(Procedural),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -105,6 +109,15 @@ impl CosmeticFilter {
                 .strip_suffix(')')
                 .ok_or(ParseError::Invalid("unterminated +js("))?;
             parse_scriptlet(inner, exception)?
+        } else if let Some(rule) = procedural::parse(body)? {
+            if domains.include.is_empty() && !exception {
+                // Evaluating a procedural selector means walking the page, so
+                // it is only run on the sites it is scoped to.
+                return Err(ParseError::Unsupported(
+                    "generic procedural cosmetic filter",
+                ));
+            }
+            CosmeticAction::Procedural(rule)
         } else {
             validate_selector(body)?;
             CosmeticAction::Hide(body.to_string())
@@ -378,8 +391,25 @@ mod tests {
         ] {
             assert!(CosmeticFilter::parse(bad).is_err(), "{bad}");
         }
+        // Operators that stay unsupported.
+        for unsupported in [
+            "example.com##div:style(color: red)",
+            "example.com##div:matches-attr(x)",
+            "example.com##div:if(.a)",
+            "example.com##div:min-text-length(10)",
+            "example.com##div:has(:has-text(x))",
+        ] {
+            assert!(
+                matches!(
+                    CosmeticFilter::parse(unsupported),
+                    Err(ParseError::Unsupported(_))
+                ),
+                "{unsupported}"
+            );
+        }
+        // Procedural filters are site-specific only.
         assert!(matches!(
-            CosmeticFilter::parse("example.com##div:has-text(Sponsored)"),
+            CosmeticFilter::parse("##div:has-text(Sponsored)"),
             Err(ParseError::Unsupported(_))
         ));
         assert!(matches!(
@@ -394,6 +424,23 @@ mod tests {
             CosmeticFilter::parse("example.com##^script"),
             Err(ParseError::Unsupported(_))
         ));
+    }
+
+    #[test]
+    fn procedural_filters() {
+        let f = CosmeticFilter::parse("example.com##.card:has-text(Sponsored)").unwrap();
+        assert!(
+            matches!(&f.action, CosmeticAction::Procedural(p) if p.base == ".card" && !p.remove)
+        );
+        assert!(!f.exception);
+        let f = CosmeticFilter::parse("example.com#?#.row:has-text(/ad/i):upward(2)").unwrap();
+        assert!(matches!(f.action, CosmeticAction::Procedural(_)));
+        // Exceptions for procedural filters parse, even without a domain.
+        let f = CosmeticFilter::parse("#@#.card:has-text(Sponsored)").unwrap();
+        assert!(f.exception && matches!(f.action, CosmeticAction::Procedural(_)));
+        // Unsafe arguments and selectors are still refused.
+        assert!(CosmeticFilter::parse("example.com##.a:has-text(/(x+)+/)").is_err());
+        assert!(CosmeticFilter::parse("example.com##.a{b}:has-text(x)").is_err());
     }
 
     #[test]
