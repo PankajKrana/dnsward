@@ -8,6 +8,8 @@
  * - Installs network rules as declarativeNetRequest dynamic rules, evaluated
  *   by the browser itself: no request data leaves the browser.
  * - Injects cosmetic CSS (as user-origin stylesheets) and scriptlets.
+ * - Debounces link-shim redirectors (google.com/url?q=...) by navigating
+ *   straight to the destination, using fixed rules from debounce.js.
  * - Never sends browsing history anywhere: only the hostname of the current
  *   frame and class/id tokens are sent to the local service, to select
  *   cosmetic filters.
@@ -15,7 +17,7 @@
 'use strict';
 
 if (typeof importScripts === 'function') {
-  importScripts('scriptlets.js'); // Chromium service worker
+  importScripts('scriptlets.js', 'debounce.js'); // Chromium service worker
 }
 
 const api = globalThis.browser ?? globalThis.chrome;
@@ -209,6 +211,39 @@ api.webNavigation.onCommitted.addListener((details) => {
     })
     .catch(() => {});
 });
+
+// ---------------------------------------------------------------------------
+// Debouncing
+// ---------------------------------------------------------------------------
+
+const DEBOUNCE_WINDOW_MS = 2000;
+const DEBOUNCE_MAX_PER_WINDOW = 3;
+const debounceRecent = new Map(); // tabId -> timestamps of recent redirects
+
+/**
+ * Replaces a top-level navigation to a redirector with one to its
+ * destination. The browser may already have sent the request to the
+ * redirector; extensions cannot stop that in Chromium (MV3), so this saves
+ * the page load and the tracking redirect, not the first request.
+ */
+api.webNavigation.onBeforeNavigate.addListener((details) => {
+  if (details.frameId !== 0) return;
+  const target = adblockDebounce(details.url);
+  if (!target) return;
+  // Guard against ping-pong with a site that redirects back.
+  const now = Date.now();
+  const recent = (debounceRecent.get(details.tabId) ?? []).filter((t) => now - t < DEBOUNCE_WINDOW_MS);
+  if (recent.length >= DEBOUNCE_MAX_PER_WINDOW) return;
+  recent.push(now);
+  debounceRecent.set(details.tabId, recent);
+  getState()
+    .then(({ pausedSites }) => {
+      if (isPaused(hostnameOf(details.url), pausedSites)) return;
+      return api.tabs.update(details.tabId, { url: target });
+    })
+    .catch(() => {});
+});
+api.tabs.onRemoved.addListener((tabId) => debounceRecent.delete(tabId));
 
 // ---------------------------------------------------------------------------
 // Sync with the service

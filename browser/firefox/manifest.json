@@ -19,7 +19,7 @@
   "web_accessible_resources": [
     { "resources": ["resources/*"], "matches": ["<all_urls>"] }
   ],
-  "background": { "scripts": ["scriptlets.js", "background.js"] },
+  "background": { "scripts": ["scriptlets.js", "debounce.js", "background.js"] },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
