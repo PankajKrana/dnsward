@@ -42,6 +42,7 @@ dependencies = [
  "adblock-config",
  "adblock-dns",
  "adblock-filter",
+ "adblock-proxy",
  "adblock-stats",
  "anyhow",
  "libc",
@@ -89,6 +90,17 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "tracing",
+]
+
+[[package]]
+name = "adblock-proxy"
+version = "0.1.0"
+dependencies = [
+ "adblock-filter",
+ "adblock-stats",
+ "thiserror",
+ "tokio",
  "tracing",
 ]
 

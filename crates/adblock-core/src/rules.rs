@@ -160,29 +160,35 @@ impl LiveFilter {
         self.revision.load(Ordering::Relaxed)
     }
 
+    /// Decisions that do not depend on the filter lists: paused filtering,
+    /// hosts AdBlock itself needs, and the user's allow/block entries.
+    fn overridden(&self, host: &str) -> Option<(Decision, String)> {
+        if !self.is_enabled() {
+            return Some((Decision::Allow, "filtering is paused".into()));
+        }
+        let o = self.overrides.read().unwrap_or_else(|e| e.into_inner());
+        if o.critical.contains(host) {
+            return Some((Decision::Allow, "required by AdBlock itself".into()));
+        }
+        if let Some(d) = find_suffix(&o.allow, host) {
+            return Some((Decision::Allow, format!("allowlisted ({d})")));
+        }
+        if let Some(d) = find_suffix(&o.block, host) {
+            return Some((
+                Decision::Block {
+                    domain: d.to_string(),
+                    category: Category::Custom,
+                },
+                format!("blocklisted ({d})"),
+            ));
+        }
+        None
+    }
+
     /// Full decision with a human-readable explanation.
     pub fn explain(&self, host: &str) -> (Decision, String, Option<String>) {
-        if !self.is_enabled() {
-            return (Decision::Allow, "filtering is paused".into(), None);
-        }
-        {
-            let o = self.overrides.read().unwrap_or_else(|e| e.into_inner());
-            if o.critical.contains(host) {
-                return (Decision::Allow, "required by AdBlock itself".into(), None);
-            }
-            if let Some(d) = find_suffix(&o.allow, host) {
-                return (Decision::Allow, format!("allowlisted ({d})"), None);
-            }
-            if let Some(d) = find_suffix(&o.block, host) {
-                return (
-                    Decision::Block {
-                        domain: d.to_string(),
-                        category: Category::Custom,
-                    },
-                    format!("blocklisted ({d})"),
-                    None,
-                );
-            }
+        if let Some((decision, reason)) = self.overridden(host) {
+            return (decision, reason, None);
         }
         let engine = self.engine();
         match engine.check_hostname(host) {
@@ -199,6 +205,46 @@ impl LiveFilter {
                 None,
             ),
             HostVerdict::NoMatch => (Decision::Allow, "no matching rule".into(), None),
+        }
+    }
+}
+
+impl adblock_proxy::ProxyFilter for LiveFilter {
+    fn check_host(&self, host: &str) -> adblock_proxy::Verdict {
+        match self.explain(host).0 {
+            Decision::Allow => adblock_proxy::Verdict::Allow,
+            Decision::Block { domain, category } => {
+                adblock_proxy::Verdict::Block { domain, category }
+            }
+        }
+    }
+
+    fn check_url(&self, url: &str, referer: Option<&str>) -> adblock_proxy::Verdict {
+        let Some(req) =
+            adblock_filter::Request::new(url, referer, adblock_filter::ResourceType::Other)
+        else {
+            return adblock_proxy::Verdict::Allow;
+        };
+        // User entries, pause and "needed by AdBlock" win over list rules.
+        if let Some((decision, _)) = self.overridden(&req.hostname) {
+            return match decision {
+                Decision::Allow => adblock_proxy::Verdict::Allow,
+                Decision::Block { domain, category } => {
+                    adblock_proxy::Verdict::Block { domain, category }
+                }
+            };
+        }
+        let engine = self.engine();
+        match engine.check_request(&req) {
+            adblock_filter::UrlVerdict::Blocked { list, .. } => adblock_proxy::Verdict::Block {
+                category: engine
+                    .lists()
+                    .get(usize::from(list))
+                    .map(|l| l.category)
+                    .unwrap_or_default(),
+                domain: req.hostname,
+            },
+            _ => adblock_proxy::Verdict::Allow,
         }
     }
 }

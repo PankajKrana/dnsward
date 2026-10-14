@@ -123,34 +123,62 @@ below); it has not yet been exercised end-to-end on a live system.
 
 ## Phase 2: explicit forward proxy (option C)
 
-New crate `adblock-proxy`, same dependency position as `adblock-dns` (depends
-on `adblock-filter`, `adblock-config`, `adblock-stats`; no platform code).
+**Status: the proxy is implemented and off by default** (`[proxy] enabled =
+true`, crate `adblock-proxy`, run by the daemon). **Not yet done:** setting
+it as the system proxy automatically, and per-app attribution. Both are
+described below and remain open.
 
 ```text
 app ──CONNECT host:443──► adblock-proxy (127.0.0.1:8118)
-                           ├─ peer uid/pid lookup (loopback socket owner)
-                           ├─ Engine::check_hostname(host)  ──blocked──► 403 + close
+                           ├─ LiveFilter::check_host  ──blocked──► 403 + close
+                           ├─ resolve (system resolver = AdBlock DNS when enabled)
+                           ├─ refuse loopback/private/link-local/special targets
                            └─ allowed: TCP tunnel, bytes untouched
+app ──GET http://host/path──► same, plus URL rules (Referer as the page);
+                              forwarded as one origin-form request, Connection: close
+app ──GET /proxy.pac──────► PAC file (local names DIRECT, others PROXY …; DIRECT)
 ```
 
-* Listens on loopback only. Refuses non-loopback peers and any `CONNECT`
-  target that is loopback, link-local or private (no SSRF into the local
-  network or the daemon's control socket). Ports other than 443/80 are
-  rejected unless configured.
-* Reuses the engine unchanged: same lists, user allow/block rules, critical
-  host protection, CNAME uncloaking (resolution goes through the daemon's
-  resolver so the DNS filter sees every lookup).
-* Clients are directed to it with a generated **PAC file** served from
-  loopback and set with the system proxy settings (`networksetup
-  -setautoproxyurl` on macOS). Apps that ignore system proxy settings are
-  unaffected, which is the correct failure direction. PAC routes only what is
-  configured (for example a list of apps' hosts), never "everything".
-* Fail-safe: a dead proxy must not take the machine offline. The PAC returns
-  `PROXY 127.0.0.1:8118; DIRECT`, and `enable`/`disable` use the same
-  persist-verify-rollback pattern as DNS. A health probe in the daemon
-  removes the proxy setting if the listener is down.
-* Logs and stats follow `privacy.md`: hostnames of **blocked** requests only,
-  nothing else. No URLs, no client identity beyond an in-memory counter.
+What is built:
+
+* Loopback-only listener (non-loopback addresses are rejected at bind and in
+  config validation; there is deliberately no option to expose it).
+* Strict request parsing with size limits, no obsolete line folding, no
+  control characters; a randomized no-panic test plus end-to-end tests with
+  real sockets (tunnel, early data, blocked host, disallowed port, SSRF
+  refusal, URL rules, header rewriting, PAC, malformed and oversized input,
+  connection limit).
+* Target policy: connections to loopback, private, link-local, CGNAT,
+  multicast, documentation and other special-use addresses (including
+  IPv4-mapped and NAT64 forms) are refused, so the proxy cannot be used to
+  reach local services such as AdBlock's own control socket.
+* Same decisions as everything else: the daemon's `LiveFilter`, so user
+  allow/block entries, "required by AdBlock" hosts and pause apply. Blocked
+  requests are counted in the normal statistics; allowed ones and URLs are
+  never logged or stored.
+* A concurrency cap (excess connections are closed), a head timeout, a
+  connect timeout and a 5-minute tunnel idle timeout.
+* `adblock status` shows the listening address when the proxy is on.
+
+Deliberate limits:
+
+* **Plain HTTP is one request per connection.** The proxy forces
+  `Connection: close` (except for WebSocket upgrades) so a client cannot
+  slip further requests past the filter. HTTPS tunnels are opaque, so only
+  the hostname is checked.
+* **No per-app attribution yet.** The proxy does not look up which process
+  owns the client socket; that is the remaining reason to prefer this over
+  DNS alone and is not built.
+* **No automatic system configuration.** Clients must be pointed at
+  `http://127.0.0.1:8118/proxy.pac` by hand (macOS: System Settings → Network
+  → Proxies → Automatic Proxy Configuration). The planned
+  `adblock proxy on/off` would follow the same persist, verify and roll back
+  pattern as DNS, and remove the setting if the proxy is down. The PAC file
+  already falls back to DIRECT.
+* **Value check.** As the assessment above predicted, hostname decisions in
+  the proxy duplicate the DNS filter; the new capability is URL rules for
+  plain `http://` traffic, which is a small and shrinking share of traffic.
+  Decision gate 2 applies before building more.
 
 ## Phase 3 (only if gated in): scoped TLS interception (option D)
 

@@ -178,6 +178,9 @@ pub struct StatusInfo {
     pub last_update_error: Option<String>,
     pub next_update: Option<u64>,
     pub update_in_progress: bool,
+    /// Addresses the local filtering proxy listens on (empty when off).
+    #[serde(default)]
+    pub proxy_listen: Vec<String>,
     pub browser_enabled: bool,
     pub browser_last_seen: Option<u64>,
     pub browser_name: Option<String>,

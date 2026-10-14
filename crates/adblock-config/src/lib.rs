@@ -40,6 +40,7 @@ pub struct Config {
     pub dns: Dns,
     pub filters: Filters,
     pub browser: Browser,
+    pub proxy: Proxy,
     pub stats: Stats,
     pub privacy: Privacy,
     pub custom: Custom,
@@ -352,6 +353,31 @@ impl Default for Browser {
     }
 }
 
+/// The optional local filtering proxy (`adblock-proxy`). It decides by
+/// hostname for HTTPS tunnels and by URL for plain HTTP; it never decrypts.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default, deny_unknown_fields)]
+pub struct Proxy {
+    pub enabled: bool,
+    /// Loopback addresses only; there is no way to expose the proxy to other
+    /// machines.
+    pub listen: Vec<String>,
+    /// Destination ports the proxy may connect to.
+    pub ports: Vec<u16>,
+    pub max_connections: usize,
+}
+
+impl Default for Proxy {
+    fn default() -> Self {
+        Proxy {
+            enabled: false,
+            listen: vec!["127.0.0.1:8118".into()],
+            ports: vec![80, 443, 8080, 8443],
+            max_connections: 512,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 pub struct Stats {
@@ -441,6 +467,14 @@ impl Config {
             .listen
             .iter()
             .filter_map(|s| parse_socket_addr(s, 53))
+            .collect()
+    }
+
+    pub fn proxy_listen_addrs(&self) -> Vec<SocketAddr> {
+        self.proxy
+            .listen
+            .iter()
+            .filter_map(|a| parse_socket_addr(a, 8118))
             .collect()
     }
 
@@ -627,6 +661,25 @@ impl Config {
             if adblock_filter::domain::normalize_hostname(d).is_none() {
                 return Err(invalid(format!("custom: invalid domain {d:?}")));
             }
+        }
+        if self.proxy.enabled && self.proxy.listen.is_empty() {
+            return Err(invalid("proxy.listen must contain at least one address"));
+        }
+        for l in &self.proxy.listen {
+            let addr = parse_socket_addr(l, 8118)
+                .ok_or_else(|| invalid(format!("proxy.listen: invalid address {l:?}")))?;
+            if !addr.ip().is_loopback() {
+                return Err(invalid(format!(
+                    "proxy.listen: {addr} is not a loopback address; the proxy is never \
+                     offered to other machines"
+                )));
+            }
+        }
+        if self.proxy.ports.is_empty() || self.proxy.ports.contains(&0) {
+            return Err(invalid("proxy.ports must list ports between 1 and 65535"));
+        }
+        if !(1..=65_536).contains(&self.proxy.max_connections) {
+            return Err(invalid("proxy.max_connections must be between 1 and 65536"));
         }
         if !(1..=3650).contains(&self.stats.retention_days) {
             return Err(invalid("stats.retention_days must be between 1 and 3650"));

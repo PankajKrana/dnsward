@@ -102,6 +102,15 @@ min_rules = 1
 enabled = true
 max_dnr_rules = 30000
 
+# Optional local filtering proxy. Off by default. It filters HTTPS tunnels by
+# hostname (the encrypted bytes are never read) and plain http:// requests by
+# URL. Point a client at http://127.0.0.1:8118/proxy.pac to use it.
+[proxy]
+enabled = false
+listen = ["127.0.0.1:8118"]   # loopback only
+ports = [80, 443, 8080, 8443]
+max_connections = 512
+
 [stats]
 enabled = true
 # Count *blocked* domains for "top blocked" output. Visited (allowed) domains

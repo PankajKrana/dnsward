@@ -149,6 +149,12 @@ pub fn render_status(s: &StatusInfo, routing: DnsRouting, style: Style) -> Strin
         "Browser filter",
         &style.state(browser_state, &browser_label),
     ));
+    if let Some(addr) = s.proxy_listen.first() {
+        out.push_str(&row(
+            "Local proxy",
+            &style.state(State::Good, &format!("Listening ({addr}/proxy.pac)")),
+        ));
+    }
     out.push_str(&row("Filter rules", &thousands(s.rule_count as u64)));
     out.push_str(&row("Blocked today", &thousands(s.blocked_today)));
     out.push_str(&row("Ads", &thousands(s.ads_today)));
@@ -322,5 +328,16 @@ mod tests {
         assert!(text.contains("Browser filter:  ● Active"));
         let text = render_status(&s, DnsRouting::NotRouted, Style { color: false });
         assert!(text.contains("sudo adblock enable"));
+        assert!(
+            !text.contains("Local proxy"),
+            "hidden while the proxy is off"
+        );
+        let s = StatusInfo {
+            proxy_listen: vec!["127.0.0.1:8118".into()],
+            ..s
+        };
+        let text = render_status(&s, DnsRouting::Active, Style { color: false });
+        assert!(text.contains("Local proxy:"));
+        assert!(text.contains("127.0.0.1:8118/proxy.pac"));
     }
 }

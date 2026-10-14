@@ -9,6 +9,7 @@ license.workspace = true
 adblock-config.workspace = true
 adblock-dns.workspace = true
 adblock-filter.workspace = true
+adblock-proxy.workspace = true
 adblock-stats.workspace = true
 anyhow.workspace = true
 libc.workspace = true

@@ -5,6 +5,7 @@ members = [
     "crates/adblock-config",
     "crates/adblock-stats",
     "crates/adblock-dns",
+    "crates/adblock-proxy",
     "crates/adblock-core",
     "crates/adblock-platform",
     "crates/adblock-cli",
@@ -22,6 +23,7 @@ adblock-filter = { path = "crates/adblock-filter" }
 adblock-config = { path = "crates/adblock-config" }
 adblock-stats = { path = "crates/adblock-stats" }
 adblock-dns = { path = "crates/adblock-dns" }
+adblock-proxy = { path = "crates/adblock-proxy" }
 adblock-core = { path = "crates/adblock-core" }
 adblock-platform = { path = "crates/adblock-platform" }
 adblock-cli = { path = "crates/adblock-cli" }

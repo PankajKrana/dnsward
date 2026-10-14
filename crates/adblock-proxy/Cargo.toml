@@ -1,0 +1,16 @@
+[package]
+name = "adblock-proxy"
+description = "Local filtering forward proxy (HTTP CONNECT and plain HTTP, no TLS interception)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+adblock-filter.workspace = true
+adblock-stats.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }

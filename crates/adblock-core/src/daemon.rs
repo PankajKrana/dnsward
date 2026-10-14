@@ -46,6 +46,7 @@ pub struct Daemon {
     pub updater: Arc<Updater>,
     resolver: Option<Arc<Resolver>>,
     listen: Mutex<Vec<SocketAddr>>,
+    proxy_listen: Vec<SocketAddr>,
     started: Instant,
     user_rules: Mutex<UserRules>,
     browser_seen: AtomicU64,
@@ -67,6 +68,8 @@ impl std::fmt::Debug for Daemon {
 pub struct RunningDaemon {
     pub daemon: Arc<Daemon>,
     pub dns_addrs: Vec<SocketAddr>,
+    /// Where the local filtering proxy listens (empty when it is off).
+    pub proxy_addrs: Vec<SocketAddr>,
     shutdown_tx: watch::Sender<bool>,
     tasks: tokio::task::JoinSet<()>,
 }
@@ -162,6 +165,28 @@ impl Daemon {
             None
         };
 
+        // Local filtering proxy (off by default)
+        let mut proxy_listen = Vec::new();
+        if config.proxy.enabled {
+            let listeners = adblock_proxy::bind(&config.proxy_listen_addrs())
+                .await
+                .context("cannot start the proxy listener (is the address already in use?)")?;
+            proxy_listen = listeners.bound.clone();
+            tracing::info!(addrs = ?proxy_listen, "proxy started");
+            tasks.spawn(adblock_proxy::serve(
+                listeners,
+                filter.clone(),
+                stats.clone(),
+                adblock_proxy::ProxyConfig {
+                    ports: config.proxy.ports.clone(),
+                    max_connections: config.proxy.max_connections,
+                    log_blocked: config.privacy.log_blocked,
+                    allow_local_targets: false,
+                },
+                shutdown_rx.clone(),
+            ));
+        }
+
         let daemon = Arc::new(Daemon {
             config,
             paths,
@@ -170,6 +195,7 @@ impl Daemon {
             updater,
             resolver,
             listen: Mutex::new(dns_addrs.clone()),
+            proxy_listen: proxy_listen.clone(),
             started: Instant::now(),
             user_rules: Mutex::new(user_rules),
             browser_seen: AtomicU64::new(0),
@@ -199,6 +225,7 @@ impl Daemon {
         Ok(RunningDaemon {
             daemon,
             dns_addrs,
+            proxy_addrs: proxy_listen,
             shutdown_tx,
             tasks,
         })
@@ -295,6 +322,7 @@ impl Daemon {
                 .auto_update
                 .then(|| self.updater.next_update_at(&self.config)),
             update_in_progress: self.updater.is_running(),
+            proxy_listen: self.proxy_listen.iter().map(|a| a.to_string()).collect(),
             browser_enabled: self.config.browser.enabled,
             browser_last_seen: (seen > 0).then_some(seen),
             browser_name: self

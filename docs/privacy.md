@@ -39,6 +39,15 @@ cosmetic filters. This data goes only to the local process through native
 messaging and is never stored. Network blocking runs inside the browser
 (`declarativeNetRequest`); requested URLs are never sent to AdBlock.
 
+## Local filtering proxy (off by default)
+
+If you enable `[proxy]`, apps you point at it send it the hostname of each
+HTTPS connection (`CONNECT host:443`) and the full URL of each plain
+`http://` request. The proxy never decrypts HTTPS and never sees HTTPS URLs.
+It keeps nothing: URLs and allowed hostnames are not logged or stored, and
+only the counts of blocked requests are added to the normal statistics. It
+listens on loopback only.
+
 ## Reducing stored data further
 
 ```toml
