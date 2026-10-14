@@ -37,6 +37,58 @@ pub fn platform_name() -> &'static str {
     }
 }
 
+/// How the daemon is started.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct StartOptions {
+    /// If the process is root, switch to this `(uid, gid)` right after the
+    /// listening sockets are bound. macOS only lets root bind port 53 on a
+    /// specific address (loopback), so the service starts as root, binds, and
+    /// immediately gives root up, before reading any file or filter list.
+    pub drop_privileges: Option<(u32, u32)>,
+}
+
+/// Gives up root: clears supplementary groups, switches gid then uid, and
+/// verifies that root cannot be regained. Does nothing if not running as
+/// root.
+pub fn drop_privileges(uid: u32, gid: u32) -> std::io::Result<()> {
+    use std::io::{Error, ErrorKind};
+    // SAFETY: these are plain credential syscalls; the only pointer passed
+    // is the (unused) empty supplementary group list.
+    unsafe {
+        if libc::geteuid() != 0 {
+            return Ok(());
+        }
+        if uid == 0 {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "refusing to drop privileges to uid 0",
+            ));
+        }
+        if libc::setgroups(0, std::ptr::null()) != 0 {
+            let g = gid as libc::gid_t;
+            if libc::setgroups(1, &g) != 0 {
+                return Err(Error::last_os_error());
+            }
+        }
+        if libc::setgid(gid as libc::gid_t) != 0 || libc::setuid(uid as libc::uid_t) != 0 {
+            return Err(Error::last_os_error());
+        }
+        if libc::getuid() != uid as libc::uid_t
+            || libc::geteuid() != uid as libc::uid_t
+            || libc::getgid() != gid as libc::gid_t
+            || libc::getegid() != gid as libc::gid_t
+        {
+            return Err(Error::other("credentials did not change"));
+        }
+        if libc::setuid(0) == 0 {
+            return Err(Error::other(
+                "root could be regained after dropping privileges",
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Shared daemon state.
 pub struct Daemon {
     config: Config,
@@ -98,6 +150,31 @@ impl Daemon {
         paths: Paths,
         fetcher: Option<Arc<dyn Fetcher>>,
     ) -> Result<RunningDaemon> {
+        Self::start_with(config, paths, fetcher, StartOptions::default()).await
+    }
+
+    pub async fn start_with(
+        config: Config,
+        paths: Paths,
+        fetcher: Option<Arc<dyn Fetcher>>,
+        options: StartOptions,
+    ) -> Result<RunningDaemon> {
+        // Bind the DNS sockets before anything else, then drop root (see
+        // `StartOptions::drop_privileges`).
+        let dns_listeners = if config.dns.enabled {
+            Some(adblock_dns::bind(&config.listen_addrs()).await.context(
+                "cannot start the DNS listener (is another DNS server using port 53? see `adblock doctor`)",
+            )?)
+        } else {
+            None
+        };
+        if let Some((uid, gid)) = options.drop_privileges {
+            drop_privileges(uid, gid).context("cannot drop root privileges after binding")?;
+            // SAFETY: geteuid has no preconditions.
+            if unsafe { libc::geteuid() } != 0 {
+                tracing::info!(uid, "bound sockets as root, now running unprivileged");
+            }
+        }
         adblock_config::fs::ensure_dir(&paths.data_dir, 0o755).with_context(|| {
             format!("cannot create data directory {}", paths.data_dir.display())
         })?;
@@ -148,9 +225,7 @@ impl Daemon {
                 )
                 .map_err(|e| anyhow::anyhow!("cannot initialize upstream resolvers: {e}"))?,
             );
-            let listeners = adblock_dns::bind(&config.listen_addrs()).await.context(
-                "cannot start the DNS listener (is another DNS server using port 53? see `adblock doctor`)",
-            )?;
+            let listeners = dns_listeners.context("DNS listeners were not bound")?;
             dns_addrs = listeners.bound.clone();
             tracing::info!(addrs = ?dns_addrs, upstreams = ?resolver.upstream_names(), "DNS server started");
             tasks.spawn(adblock_dns::serve(
@@ -752,14 +827,19 @@ pub fn notify_ready() {
 
 /// Runs the daemon until SIGTERM/SIGINT. SIGHUP reloads rules.
 pub async fn run(config: Config, paths: Paths) -> Result<()> {
+    run_with(config, paths, StartOptions::default()).await
+}
+
+/// Like [`run`], with startup options (privilege dropping).
+pub async fn run_with(config: Config, paths: Paths, options: StartOptions) -> Result<()> {
     use tokio::signal::unix::{SignalKind, signal};
     // SAFETY: geteuid has no preconditions.
-    if unsafe { libc::geteuid() } == 0 && !paths.user_mode {
+    if unsafe { libc::geteuid() } == 0 && !paths.user_mode && options.drop_privileges.is_none() {
         tracing::warn!(
             "running as root; the installed service runs under a dedicated unprivileged account"
         );
     }
-    let running = Daemon::start(config, paths, None).await?;
+    let running = Daemon::start_with(config, paths, None, options).await?;
     notify_ready();
     let mut term = signal(SignalKind::terminate())?;
     let mut int = signal(SignalKind::interrupt())?;
@@ -777,4 +857,23 @@ pub async fn run(config: Config, paths: Paths) -> Result<()> {
     tracing::info!("shutting down");
     running.shutdown().await;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Not root: nothing to drop, and the call must not touch credentials.
+    /// (Skipped as root, where it would really drop this test process's
+    /// privileges.)
+    #[test]
+    fn dropping_privileges_is_a_no_op_for_non_root() {
+        // SAFETY: geteuid has no preconditions.
+        if unsafe { libc::geteuid() } == 0 {
+            return;
+        }
+        let before = unsafe { (libc::getuid(), libc::getgid()) };
+        assert!(drop_privileges(12345, 12345).is_ok());
+        assert_eq!(before, unsafe { (libc::getuid(), libc::getgid()) });
+    }
 }

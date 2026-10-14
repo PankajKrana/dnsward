@@ -9,11 +9,9 @@
         <string>/usr/local/bin/adblock</string>
         <string>daemon</string>
     </array>
-    <!-- Unprivileged service account. macOS 10.14+ lets any user bind port 53. -->
-    <key>UserName</key>
-    <string>_adblock</string>
-    <key>GroupName</key>
-    <string>_adblock</string>
+    <!-- Starts as root ONLY to bind 127.0.0.1:53 (macOS refuses that to other
+         users). The daemon switches to the unprivileged _adblock account right
+         after binding, before it reads any file or filter list. -->
     <key>RunAtLoad</key>
     <true/>
     <!-- Restart after crashes, but not after a clean exit or bad configuration. -->

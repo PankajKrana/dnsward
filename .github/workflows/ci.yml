@@ -87,6 +87,20 @@ jobs:
           sudo adblock allow doubleclick.net
           sudo resolvectl flush-caches || true
           ! getent ahostsv4 doubleclick.net | grep -q '0.0.0.0'
+      - name: Daemon drops root after binding its sockets
+        run: |
+          set -x
+          sudo systemctl stop adblock
+          sudo install -d -o adblock -g adblock /run/adblock
+          sudo sh -c "setsid $(command -v adblock) daemon >/tmp/adblock-root.log 2>&1 &"
+          for i in $(seq 1 30); do [ -S /run/adblock/control.sock ] && break; sleep 1; done
+          PID=$(pgrep -x adblock | head -1)
+          test -n "$PID"
+          test "$(ps -o user= -p "$PID" | tr -d ' ')" = adblock
+          getent ahostsv4 adblock-probe.test | grep -q 127.0.0.209
+          sudo kill "$PID"
+          sleep 2
+          sudo systemctl start adblock
       - name: Disable restores DNS
         run: |
           sudo adblock disable

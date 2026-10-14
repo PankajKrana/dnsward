@@ -2,8 +2,11 @@
 //! `networksetup`.
 //!
 //! macOS resolver settings cannot specify a port, so the daemon listens on
-//! port 53. Since macOS 10.14, binding ports below 1024 does not require
-//! root, so the LaunchDaemon still runs as the unprivileged `_adblock` user.
+//! port 53. macOS refuses to let an unprivileged user bind port 53 on a
+//! specific address such as 127.0.0.1 (only the wildcard address is allowed),
+//! so the LaunchDaemon starts as root; the daemon binds its sockets first and
+//! then switches to the unprivileged `_adblock` account before reading any
+//! file or filter list.
 
 use crate::cmd::{run, stdout, succeeds};
 use crate::firewall::{FirewallPlan, FirewallState, PF_ANCHOR, render_pf};

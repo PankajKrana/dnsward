@@ -123,7 +123,24 @@ fn run_daemon(cli: &Cli) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    match rt.block_on(adblock_core::run(config, paths)) {
+    // The installed macOS service starts as root only so that it can bind
+    // port 53 on loopback; the daemon gives root up right after binding.
+    let service_user = if cfg!(target_os = "macos") {
+        adblock_platform::SERVICE_USER_MACOS
+    } else {
+        adblock_platform::SERVICE_USER_LINUX
+    };
+    let drop_privileges = if adblock_platform::is_root() && !paths.user_mode {
+        let ids = adblock_platform::user_ids(service_user);
+        if ids.is_none() {
+            tracing::warn!(service_user, "service account not found; staying root");
+        }
+        ids
+    } else {
+        None
+    };
+    let options = adblock_core::StartOptions { drop_privileges };
+    match rt.block_on(adblock_core::run_with(config, paths, options)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             tracing::error!("{e:#}");

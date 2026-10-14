@@ -37,7 +37,13 @@ software.
   `CAP_NET_BIND_SERVICE` plus a strict systemd sandbox: `ProtectSystem=strict`,
   `NoNewPrivileges`, `MemoryDenyWriteExecute`, syscall filter, address-family
   restrictions, `ProtectHome`, `PrivateDevices`, and memory/task limits. On
-  macOS it runs as `_adblock` (port 53 needs no privileges on macOS 10.14+).
+  macOS refuses to let a non-root user bind port 53 on a specific address
+  such as 127.0.0.1, so the LaunchDaemon starts as root and the daemon binds
+  its DNS sockets first, then immediately switches to the unprivileged
+  `_adblock` account (clearing supplementary groups, setting gid then uid, and
+  verifying that root cannot be regained) before it reads any file, list or
+  network input. The only code that runs as root is the configuration load and
+  the socket bind.
 * **Privileged operations** (`enable`, `disable`, `start`, `stop`,
   `uninstall`) run only in the CLI under `sudo`. They call system tools with
   absolute paths and argument vectors, never through a shell.

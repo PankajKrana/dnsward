@@ -11,4 +11,4 @@ pub mod protocol;
 pub mod rules;
 pub mod update;
 
-pub use daemon::{Daemon, RunningDaemon, run};
+pub use daemon::{Daemon, RunningDaemon, StartOptions, drop_privileges, run, run_with};
