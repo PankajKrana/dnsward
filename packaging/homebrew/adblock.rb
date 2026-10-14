@@ -3,11 +3,11 @@
 #   sudo adblock enable
 class Adblock < Formula
   desc "System-wide ad and tracker blocking (filtering DNS + browser extensions)"
-  homepage "https://github.com/PankajKrana/dnsward"
-  url "https://github.com/PankajKrana/dnsward/archive/refs/tags/v0.1.1.tar.gz"
-  sha256 "3bc776235efd8ca78f29f8655b0127fdc28e30143a7d7f6783e92c80c0e64934"
+  homepage "https://github.com/PankajKrana/fuck-ads"
+  url "https://github.com/PankajKrana/fuck-ads/archive/refs/tags/v0.1.1.tar.gz"
+  sha256 "e02e4cb14fd76ecb729857ede15c8acb91d5b6d1f33625312edff00a26f256e6"
   license "MIT"
-  head "https://github.com/PankajKrana/dnsward.git", branch: "main"
+  head "https://github.com/PankajKrana/fuck-ads.git", branch: "main"
 
   depends_on "rust" => :build
   depends_on :macos

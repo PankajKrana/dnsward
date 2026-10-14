@@ -54,17 +54,17 @@ EasyPrivacy, uBlock filters, and Peter Lowe's list.
 
 **Linux**
 ```sh
-curl -fsSL https://raw.githubusercontent.com/PankajKrana/dnsward/main/installers/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/PankajKrana/fuck-ads/main/installers/install.sh | sh
 ```
 
 **macOS**
 ```sh
-curl -fsSL https://raw.githubusercontent.com/PankajKrana/dnsward/main/installers/install-macos.sh | sh
+curl -fsSL https://raw.githubusercontent.com/PankajKrana/fuck-ads/main/installers/install-macos.sh | sh
 ```
 
 **From a source checkout** (needs Rust from <https://rustup.rs>):
 ```sh
-git clone https://github.com/PankajKrana/dnsward && cd dnsward
+git clone https://github.com/PankajKrana/fuck-ads && cd fuck-ads
 ./installers/install.sh          # Linux
 ./installers/install-macos.sh    # macOS
 ```
@@ -104,7 +104,7 @@ file is kept unless you pass `--purge`.
 falls back to removing everything by hand:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/PankajKrana/dnsward/main/installers/uninstall.sh | sh
+curl -fsSL https://raw.githubusercontent.com/PankajKrana/fuck-ads/main/installers/uninstall.sh | sh
 ./installers/uninstall.sh --purge     # from a source checkout
 ```
 
@@ -257,7 +257,7 @@ The installers register Chrome, Chromium, Edge and Firefox system-wide, but
 
 The simplest way, for any install method: download
 `adblock-chromium.zip` (Chrome, Brave, Edge, Vivaldi) or `adblock-firefox.zip`
-(Firefox) from the [latest release](https://github.com/PankajKrana/dnsward/releases/latest)
+(Firefox) from the [latest release](https://github.com/PankajKrana/fuck-ads/releases/latest)
 and unzip it somewhere permanent (browsers load an unpacked extension from that
 folder, so don't delete it).
 

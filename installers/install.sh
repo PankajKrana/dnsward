@@ -1,7 +1,7 @@
 #!/bin/sh
 # AdBlock installer for Linux (x86_64, arm64) with systemd.
 #
-#   curl -fsSL https://raw.githubusercontent.com/PankajKrana/dnsward/main/installers/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/PankajKrana/fuck-ads/main/installers/install.sh | sh
 #   ./installers/install.sh                 # from a source checkout (builds with cargo)
 #
 # Environment:
@@ -12,7 +12,7 @@
 #   ADBLOCK_PREFIX=/usr/local     installation prefix
 set -eu
 
-REPO="${ADBLOCK_REPO:-PankajKrana/dnsward}"
+REPO="${ADBLOCK_REPO:-PankajKrana/fuck-ads}"
 VERSION="${ADBLOCK_VERSION:-latest}"
 PREFIX="${ADBLOCK_PREFIX:-/usr/local}"
 BIN_DIR="$PREFIX/bin"

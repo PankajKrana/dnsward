@@ -4,34 +4,34 @@ pkgver=0.1.1
 pkgrel=1
 pkgdesc="System-wide ad and tracker blocking (filtering DNS resolver + browser extensions)"
 arch=('x86_64' 'aarch64')
-url="https://github.com/PankajKrana/dnsward"
+url="https://github.com/PankajKrana/fuck-ads"
 license=('MIT')
 depends=('systemd' 'gcc-libs')
 makedepends=('cargo' 'clang')
 backup=('etc/adblock/config.toml')
 install=adblock.install
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('3bc776235efd8ca78f29f8655b0127fdc28e30143a7d7f6783e92c80c0e64934')
+sha256sums=('e02e4cb14fd76ecb729857ede15c8acb91d5b6d1f33625312edff00a26f256e6')
 
 prepare() {
-    cd "dnsward-$pkgver"
+    cd "fuck-ads-$pkgver"
     export RUSTUP_TOOLCHAIN=stable
     cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
 }
 
 build() {
-    cd "dnsward-$pkgver"
+    cd "fuck-ads-$pkgver"
     export RUSTUP_TOOLCHAIN=stable CARGO_TARGET_DIR=target
     cargo build --frozen --release -p adblock-cli
 }
 
 check() {
-    cd "dnsward-$pkgver"
+    cd "fuck-ads-$pkgver"
     cargo test --frozen --workspace --lib
 }
 
 package() {
-    cd "dnsward-$pkgver"
+    cd "fuck-ads-$pkgver"
     install -Dm0755 target/release/adblock "$pkgdir/usr/bin/adblock"
     ln -s adblock "$pkgdir/usr/bin/adblock-native-host"
     install -dm0755 "$pkgdir/usr/share/adblock/filters"

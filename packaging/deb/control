@@ -5,7 +5,7 @@ Maintainer: AdBlock maintainers <maintainers@example.com>
 Section: net
 Priority: optional
 Depends: systemd, adduser
-Homepage: https://github.com/PankajKrana/dnsward
+Homepage: https://github.com/PankajKrana/fuck-ads
 Description: System-wide ad and tracker blocking
  AdBlock blocks advertising and tracking domains for the whole system with a
  local filtering DNS resolver (DNS-over-HTTPS upstreams) and provides browser
