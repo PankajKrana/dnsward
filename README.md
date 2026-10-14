@@ -69,7 +69,7 @@ git clone https://github.com/PankajKrana/dnsward && cd dnsward
 ./installers/install-macos.sh    # macOS
 ```
 
-**Homebrew** (once the tap is published):
+**Homebrew:**
 ```sh
 brew install PankajKrana/tap/adblock
 sudo adblock enable
@@ -83,6 +83,67 @@ The installers detect your OS and CPU and verify the download's SHA-256 (or
 build from source). They create an unprivileged service account, install the
 service, write a default configuration, enable protection, download the
 filter lists, and finish with `adblock doctor`.
+
+## Uninstall
+
+**Normal way** (any install method; the `adblock` command must still work):
+
+```sh
+sudo adblock uninstall          # asks first; add --yes to skip the question
+sudo adblock uninstall --purge  # also delete the configuration file
+```
+
+This restores your previous DNS settings first (and turns off the optional
+`enforce-dns` firewall rules and the system proxy if you enabled them), then
+stops and removes the service and its `_adblock` / `adblock` account,
+unregisters the browser native-messaging host, and deletes the downloaded
+filter lists, statistics, logs and the `adblock` binary. Your configuration
+file is kept unless you pass `--purge`.
+
+**If the `adblock` command is broken or missing**, run the uninstall script. It
+falls back to removing everything by hand:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/PankajKrana/dnsward/main/installers/uninstall.sh | sh
+./installers/uninstall.sh --purge     # from a source checkout
+```
+
+**Homebrew:** run the uninstall *before* removing the formula, because the
+service and DNS settings live outside Homebrew's directories:
+
+```sh
+sudo adblock uninstall --yes
+brew uninstall adblock
+```
+
+**`.deb` / `.rpm` packages:** removing the package restores DNS and stops the
+service for you.
+
+```sh
+sudo apt remove adblock     # or: sudo apt purge adblock   (also deletes config and data)
+sudo dnf remove adblock
+sudo pacman -R adblock
+```
+
+**Browser extension:** remove it yourself in the browser's extensions page
+(for an unpacked install, delete it there; the `browser/dist` folder can then
+be deleted).
+
+**Check it worked:**
+
+```sh
+which adblock                          # should print nothing
+networksetup -getdnsservers Wi-Fi      # macOS: "There aren't any DNS Servers set" (or your own servers)
+resolvectl status | head               # Linux: no 127.0.0.1 as the DNS server
+```
+
+If DNS is still pointing at `127.0.0.1` after an uninstall, set it back by hand
+(macOS: `sudo networksetup -setdnsservers Wi-Fi Empty`, repeated for each network
+service; Linux: re-enable your normal resolver or edit `/etc/resolv.conf`).
+
+To switch protection off **without** uninstalling, use `sudo adblock disable`
+(and `sudo adblock enable` to turn it back on), or `sudo adblock pause` to stop
+filtering temporarily while leaving everything installed.
 
 ## Quick start
 

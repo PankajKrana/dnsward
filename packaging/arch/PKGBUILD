@@ -11,7 +11,7 @@ makedepends=('cargo' 'clang')
 backup=('etc/adblock/config.toml')
 install=adblock.install
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('bb050cdc825d2aec65798715192b7028ab904c4baf824d0cf02738736896c1cc')
+sha256sums=('3bc776235efd8ca78f29f8655b0127fdc28e30143a7d7f6783e92c80c0e64934')
 
 prepare() {
     cd "dnsward-$pkgver"

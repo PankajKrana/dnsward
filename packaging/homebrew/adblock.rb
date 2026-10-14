@@ -4,8 +4,8 @@
 class Adblock < Formula
   desc "System-wide ad and tracker blocking (filtering DNS + browser extensions)"
   homepage "https://github.com/PankajKrana/dnsward"
-  url "https://github.com/PankajKrana/dnsward/archive/refs/tags/v0.1.0.tar.gz"
-  sha256 "bb050cdc825d2aec65798715192b7028ab904c4baf824d0cf02738736896c1cc"
+  url "https://github.com/PankajKrana/dnsward/archive/refs/tags/v0.1.1.tar.gz"
+  sha256 "3bc776235efd8ca78f29f8655b0127fdc28e30143a7d7f6783e92c80c0e64934"
   license "MIT"
   head "https://github.com/PankajKrana/dnsward.git", branch: "main"
 
