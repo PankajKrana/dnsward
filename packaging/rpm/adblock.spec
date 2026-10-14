@@ -30,6 +30,8 @@ install -D -m 0755 %{_bin} %{buildroot}%{_bindir}/adblock
 ln -s adblock %{buildroot}%{_bindir}/adblock-native-host
 install -d %{buildroot}%{_datadir}/adblock/filters
 install -m 0644 %{_srcroot}/filters/*.txt %{buildroot}%{_datadir}/adblock/filters/
+sh %{_srcroot}/browser/build.sh >/dev/null
+cp -R %{_srcroot}/browser/dist/chromium %{_srcroot}/browser/dist/firefox %{buildroot}%{_datadir}/adblock/
 install -d %{buildroot}%{_unitdir}
 sed 's#/usr/local/bin/adblock#%{_bindir}/adblock#g' %{_srcroot}/platforms/linux/adblock.service > %{buildroot}%{_unitdir}/adblock.service
 install -D -m 0644 %{_srcroot}/crates/adblock-config/src/default-config.toml %{buildroot}%{_sysconfdir}/adblock/config.toml

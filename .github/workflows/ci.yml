@@ -58,6 +58,9 @@ jobs:
             --define "_srcroot $PWD" --define "_bin $PWD/target/release/adblock" \
             --define "_rpmdir $PWD/dist"
           rpm -qpl dist/*/adblock-*.rpm
+          rpm -qpl dist/*/adblock-*.rpm | grep -q '/usr/share/adblock/chromium/manifest.json'
+          rpm -qpl dist/*/adblock-*.rpm | grep -q '/usr/share/adblock/firefox/manifest.json'
+          dpkg-deb -c dist/adblock_0.0.0-ci_amd64.deb | grep -q 'usr/share/adblock/chromium/manifest.json'
           rpm -qp --scripts dist/*/adblock-*.rpm | grep -q systemctl
 
   shellcheck:

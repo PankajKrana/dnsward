@@ -36,6 +36,8 @@ package() {
     ln -s adblock "$pkgdir/usr/bin/adblock-native-host"
     install -dm0755 "$pkgdir/usr/share/adblock/filters"
     install -m0644 filters/*.txt "$pkgdir/usr/share/adblock/filters/"
+    sh browser/build.sh >/dev/null
+    cp -R browser/dist/chromium browser/dist/firefox "$pkgdir/usr/share/adblock/"
     install -dm0755 "$pkgdir/usr/lib/systemd/system"
     sed 's#/usr/local/bin/adblock#/usr/bin/adblock#g' platforms/linux/adblock.service > "$pkgdir/usr/lib/systemd/system/adblock.service"
     install -Dm0644 crates/adblock-config/src/default-config.toml "$pkgdir/etc/adblock/config.toml"

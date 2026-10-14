@@ -22,17 +22,22 @@ The extension re-syncs every 5 minutes, and immediately after rule updates
 ## Install
 
 ```sh
-adblock browser install            # per user, for every detected browser
-sudo adblock browser install --system   # all users (the installer does this)
+adblock browser install                 # per user, for every detected browser
+sudo adblock browser install --system   # all users (the installers do this)
 ```
 
-Then load the extension from `<prefix>/share/adblock/browser/`, or from
-`browser/dist/` after `./browser/build.sh`:
+The system-wide registration covers Chrome, Chromium, Edge and Firefox. Brave
+and Vivaldi are only registered by the per-user command.
 
-* **Chromium family:** `chrome://extensions` → Developer mode → Load
-  unpacked → `chromium/`. Open the extension's *Details* and turn on
-  **Allow User Scripts** (Chrome 138+), which makes YouTube blocking
-  reliable.
+Get the extension folder from the release (`adblock-chromium.zip`,
+`adblock-firefox.zip`), from `<prefix>/share/adblock/` (the script installers
+use `browser/chromium`; Homebrew, `.deb`, `.rpm` and Arch use `chromium` and
+`firefox` directly), or from `browser/dist/` after `./browser/build.sh`. Then:
+
+* **Chromium family (Chrome, Brave, Edge, Vivaldi):** `chrome://extensions`
+  (`brave://`, `edge://`, `vivaldi://`) → Developer mode → Load unpacked →
+  `chromium/`. In the extension's *Details* turn on **Allow User Scripts**
+  (Chrome 138+), which makes YouTube blocking reliable.
 * **Firefox 128+:** `about:debugging#/runtime/this-firefox` → Load Temporary
   Add-on → `firefox/manifest.json`. Temporary add-ons are removed on restart;
   for permanent use, sign the build through addons.mozilla.org (it can be

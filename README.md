@@ -238,24 +238,60 @@ default file.
 
 ## Browser integration
 
+The extension adds in-page blocking (cosmetic filters, YouTube, URL rules). It
+is **not on any browser store yet**, so you load it by hand. It downloads
+nothing on its own: it gets its rules from the local AdBlock service through
+native messaging, so the service must be running (`sudo adblock enable`).
+
+### 1. Register your browser (once)
+
 ```sh
-adblock browser install       # register with your browsers (no sudo needed)
+adblock browser install     # per user, no sudo. Chrome, Chromium, Brave, Edge, Vivaldi, Firefox
+adblock browser status      # which browsers are registered
 ```
 
-Then load the extension:
+The installers register Chrome, Chromium, Edge and Firefox system-wide, but
+**not Brave or Vivaldi**, so run the command above for those.
 
-* **Chrome / Brave / Edge / Vivaldi:** open `chrome://extensions`, turn on
-  *Developer mode*, choose *Load unpacked*, and select
-  `/usr/local/share/adblock/browser/chromium`. For the most reliable YouTube
-  blocking, also turn on **Allow User Scripts** in the extension's details.
-* **Firefox:** open `about:debugging` → *This Firefox* → *Load Temporary
-  Add-on*, and pick `manifest.json` in `…/browser/firefox`. For permanent
-  installation, use a signed build from addons.mozilla.org.
+### 2. Get the extension folder
 
-The extension downloads nothing on its own. It gets its rules from the local
-AdBlock service through native messaging. Its popup shows status and can
-pause blocking for the current site. Details:
-[docs/browser.md](docs/browser.md).
+The simplest way, for any install method: download
+`adblock-chromium.zip` (Chrome, Brave, Edge, Vivaldi) or `adblock-firefox.zip`
+(Firefox) from the [latest release](https://github.com/PankajKrana/dnsward/releases/latest)
+and unzip it somewhere permanent (browsers load an unpacked extension from that
+folder, so don't delete it).
+
+Or use the copy your install already put on disk:
+
+| Installed with | Folders |
+|---|---|
+| `install.sh` / `install-macos.sh` | `/usr/local/share/adblock/browser/chromium` and `…/firefox` |
+| Homebrew | `$(brew --prefix)/share/adblock/chromium` and `…/firefox` |
+| `.deb`, `.rpm`, Arch | `/usr/share/adblock/chromium` and `…/firefox` |
+| Source checkout | run `sh browser/build.sh`, then `browser/dist/chromium` and `browser/dist/firefox` |
+
+### 3. Load it
+
+| Browser | Steps |
+|---|---|
+| **Chrome** | Open `chrome://extensions` → turn on **Developer mode** → **Load unpacked** → choose the `chromium` folder. In the extension's *Details*, turn on **Allow User Scripts** (Chrome 138+) for reliable YouTube blocking. |
+| **Brave** | Open `brave://extensions` → **Developer mode** → **Load unpacked** → the `chromium` folder. Turn on **Allow User Scripts** if your version shows it. Remember `adblock browser install` (Brave is not in the system-wide registration). |
+| **Edge** | Open `edge://extensions` → **Developer mode** → **Load unpacked** → the `chromium` folder. |
+| **Vivaldi** | Open `vivaldi://extensions` → **Developer mode** → **Load unpacked** → the `chromium` folder. Run `adblock browser install` first. |
+| **Firefox 128+** | Open `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on** → pick `manifest.json` in the `firefox` folder (or the zip). Then in `about:addons` give the extension access to all websites. Temporary add-ons are removed when Firefox restarts; for a permanent install you need a build signed through addons.mozilla.org. |
+| **Safari** | No loadable extension: Safari requires a signed Xcode app. Export content-blocker rules instead (`adblock browser export-safari rules.json`; network and element blocking only). See [browser/safari](browser/safari/README.md). |
+| **Opera and others** | Not registered by `adblock browser install`, so the extension cannot reach the service. |
+
+All Chromium-based browsers use the same extension ID
+(`chlpacjmjgeglnhaedpfiffkdfakeana`, fixed by the key in the manifest), so
+nothing needs configuring.
+
+### 4. Check it works
+
+`adblock status` should show **Browser filter: Active** (it says *Not
+connected* until a browser has talked to the service), and the extension's
+popup shows its status and can pause blocking for the current site. More
+detail: [docs/browser.md](docs/browser.md).
 
 ## YouTube
 

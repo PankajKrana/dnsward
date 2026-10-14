@@ -53,6 +53,10 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+      - name: Browser extensions
+        run: |
+          ./browser/build.sh
+          cp browser/dist/adblock-chromium.zip browser/dist/adblock-firefox.zip dist/
       - name: Checksums
         run: cd dist && find . -type f ! -name '*.sha256' -exec sha256sum {} + > SHA256SUMS
       - uses: softprops/action-gh-release@v2
