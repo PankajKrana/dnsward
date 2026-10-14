@@ -284,7 +284,7 @@ async function sync(force = false) {
 // Cosmetic filtering
 // ---------------------------------------------------------------------------
 
-const cosmeticCache = new Map(); // hostname -> selectors (specific + complex)
+const cosmeticCache = new Map(); // hostname -> { selectors, procedural } (the once-per-frame answer)
 const CACHE_MAX = 200;
 const MAX_CSS_SELECTORS = 4000;
 
@@ -295,31 +295,40 @@ function cssFor(selectors) {
 
 async function cosmetic(sender, msg) {
   const tabId = sender.tab?.id;
-  if (tabId === undefined) return;
+  if (tabId === undefined) return {};
   const host = hostnameOf(sender.url || '');
-  if (!host) return;
+  if (!host) return {};
   const { pausedSites } = await getState();
-  if (isPaused(host, pausedSites)) return;
+  if (isPaused(host, pausedSites)) return {};
 
   const classes = Array.isArray(msg.classes) ? msg.classes.slice(0, 5000) : [];
   const ids = Array.isArray(msg.ids) ? msg.ids.slice(0, 5000) : [];
-  let selectors;
-  if (msg.complex && cosmeticCache.has(host) && classes.length === 0 && ids.length === 0) {
-    selectors = cosmeticCache.get(host);
+  // The once-per-frame request (no tokens): site-specific selectors and the
+  // procedural filters. Its answer is cached per host.
+  const firstRequest = !!msg.complex && classes.length === 0 && ids.length === 0;
+  let result;
+  if (firstRequest && cosmeticCache.has(host)) {
+    result = cosmeticCache.get(host);
   } else {
     const resp = await call({ cmd: 'cosmetic', hostname: host, classes, ids, complex: !!msg.complex });
-    selectors = resp.data.selectors;
-    if (msg.complex && classes.length === 0 && ids.length === 0) {
+    result = {
+      selectors: resp.data.selectors ?? [],
+      procedural: Array.isArray(resp.data.procedural) ? resp.data.procedural : [],
+    };
+    if (firstRequest) {
       if (cosmeticCache.size >= CACHE_MAX) cosmeticCache.delete(cosmeticCache.keys().next().value);
-      cosmeticCache.set(host, selectors);
+      cosmeticCache.set(host, result);
     }
   }
-  if (!selectors || selectors.length === 0) return;
-  await api.scripting.insertCSS({
-    target: { tabId, frameIds: [sender.frameId ?? 0] },
-    css: cssFor(selectors),
-    origin: 'USER',
-  });
+  if (result.selectors.length > 0) {
+    await api.scripting.insertCSS({
+      target: { tabId, frameIds: [sender.frameId ?? 0] },
+      css: cssFor(result.selectors),
+      origin: 'USER',
+    });
+  }
+  // Procedural filters go back to the content script, which evaluates them.
+  return msg.complex ? { procedural: result.procedural } : {};
 }
 
 // ---------------------------------------------------------------------------
@@ -329,8 +338,10 @@ async function cosmetic(sender, msg) {
 api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg || typeof msg.type !== 'string') return false;
   if (msg.type === 'cosmetic' && sender.tab) {
-    cosmetic(sender, msg).catch(() => {});
-    return false;
+    cosmetic(sender, msg)
+      .then((reply) => sendResponse(reply ?? {}))
+      .catch(() => sendResponse({}));
+    return true; // the reply carries procedural filters
   }
   if (sender.tab) return false; // everything below is popup-only
   if (msg.type === 'popup-status') {

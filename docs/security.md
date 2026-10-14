@@ -81,6 +81,17 @@ clients have URLs stripped. See [privacy.md](privacy.md).
 * **Scriptlet arguments can contain regular expressions** that run in the
   page (as in uBlock Origin). A hostile list could make a page slow, but not
   read data or run code.
+* **Procedural-filter arguments are data, never code.** `:has-text()`,
+  `:matches-css()`, `:xpath()` and `:upward()` arguments are parsed and
+  validated by the service before the extension sees them: text is bounded,
+  regular expressions are length-limited, restricted to the `i m s u` flags and
+  refused if they use backreferences, lookaround or nested quantifiers (the
+  constructs that make JavaScript engines backtrack catastrophically), XPath
+  is length-limited (it cannot run code), and CSS selectors go through the same
+  validation as every other selector. The extension examines at most 8 KiB of
+  an element's text, keeps at most 2,000 elements per step, and works in
+  30 ms slices, so a hostile list can make a page slower at worst. `:style()`
+  and other operators that would inject CSS or attributes remain unsupported.
 * **The Firefox DoH canary** (`use-application-dns.net` → NXDOMAIN) is
   answered so Firefox keeps using system DNS. This is a documented,
   user-visible signal, not a hidden interception.

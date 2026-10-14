@@ -9,6 +9,7 @@ use crate::cosmetic::{CosmeticAction, CosmeticFilter, SelectorKind, selector_key
 use crate::domain::{DomainConstraint, HostPattern, is_same_or_subdomain, suffixes};
 use crate::network::{Anchor, NetworkFilter, glob_match};
 use crate::parser::{ListFormat, Rule, parse_line};
+use crate::procedural::Procedural;
 use crate::request::{Request, ResourceType};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -84,6 +85,11 @@ impl UrlVerdict {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CosmeticResult {
     pub selectors: Vec<String>,
+    /// Procedural filters for the page (`:has-text()` and friends), which the
+    /// extension evaluates in the DOM. Only sent with the once-per-frame
+    /// request (`include_complex`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub procedural: Vec<Procedural>,
     /// The page disabled generic cosmetic filtering (`$generichide`), so the
     /// client need not send class/id tokens.
     pub generichide: bool,
@@ -257,6 +263,15 @@ struct CosmeticEntry {
     selector: Box<str>,
     domains: DomainConstraint,
 }
+
+#[derive(Debug, Clone)]
+struct ProceduralEntry {
+    rule: Procedural,
+    domains: DomainConstraint,
+}
+
+/// Most procedural filters sent to one page.
+const MAX_PROCEDURAL_PER_PAGE: usize = 500;
 
 /// Accumulates parsed rules before compiling them into an [`Engine`].
 #[derive(Debug, Default)]
@@ -434,6 +449,9 @@ pub struct Engine {
     generic_id: HashMap<Box<str>, Vec<CosmeticEntry>>,
     generic_complex: Vec<CosmeticEntry>,
     hide_exceptions: Vec<CosmeticEntry>,
+    specific_procedural: HashMap<Box<str>, Vec<ProceduralEntry>>,
+    entity_procedural: Vec<ProceduralEntry>,
+    procedural_exceptions: Vec<(Box<str>, DomainConstraint)>,
     generic_hide_exceptions: HashSet<Box<str>>,
     scriptlets: Vec<ScriptletRule>,
 }
@@ -455,6 +473,27 @@ impl Engine {
                 args,
                 exception: filter.exception,
             }),
+            CosmeticAction::Procedural(rule) => {
+                if filter.exception {
+                    self.procedural_exceptions
+                        .push((rule.source.as_str().into(), filter.domains));
+                    return;
+                }
+                let entry = ProceduralEntry {
+                    rule,
+                    domains: filter.domains.clone(),
+                };
+                for pattern in &filter.domains.include {
+                    match pattern {
+                        HostPattern::Domain(d) => self
+                            .specific_procedural
+                            .entry(d.as_str().into())
+                            .or_default()
+                            .push(entry.clone()),
+                        HostPattern::Entity(_) => self.entity_procedural.push(entry.clone()),
+                    }
+                }
+            }
             CosmeticAction::Hide(selector) => {
                 let generic = filter.domains.include.is_empty();
                 if filter.exception {
@@ -786,10 +825,43 @@ impl Engine {
             .filter(|s| !excepted.contains(s) && !self.generic_hide_exceptions.contains(*s))
             .map(String::from)
             .collect();
+        let procedural = if include_complex && !specifichide {
+            self.procedural_for(hostname)
+        } else {
+            Vec::new()
+        };
         CosmeticResult {
             selectors,
+            procedural,
             generichide,
         }
+    }
+
+    /// Procedural filters for `hostname`, after exceptions.
+    fn procedural_for(&self, hostname: &str) -> Vec<Procedural> {
+        let mut candidates: Vec<&ProceduralEntry> = Vec::new();
+        for suffix in suffixes(hostname) {
+            if let Some(entries) = self.specific_procedural.get(suffix) {
+                candidates.extend(entries);
+            }
+        }
+        candidates.extend(&self.entity_procedural);
+
+        let mut out: Vec<Procedural> = Vec::new();
+        let mut seen: HashSet<&str> = HashSet::new();
+        for e in candidates {
+            if out.len() >= MAX_PROCEDURAL_PER_PAGE {
+                break;
+            }
+            let excepted = self
+                .procedural_exceptions
+                .iter()
+                .any(|(src, d)| **src == *e.rule.source && d.matches(Some(hostname)));
+            if e.domains.matches(Some(hostname)) && !excepted && seen.insert(&e.rule.source) {
+                out.push(e.rule.clone());
+            }
+        }
+        out
     }
 
     /// Scriptlets to run on `hostname`, after applying exceptions.
@@ -1084,6 +1156,74 @@ m.youtube.com#@#+js(json-prune, adPlacements)
         assert!(
             !e.check_request(&req("https://x.example/p?fbclid=1"))
                 .is_blocked()
+        );
+    }
+
+    #[test]
+    fn procedural_filters_by_site() {
+        let mut b = EngineBuilder::new();
+        let stats = b.add_list(
+            "t",
+            Category::Ads,
+            "shop.example##.card:has-text(Sponsored)\n\
+             shop.example##.row:xpath(..)\n\
+             news.*##.promo:has-text(/ad/i)\n\
+             ##.generic:has-text(x)\n\
+             shop.example##div:style(color: red)\n",
+            ListFormat::Auto,
+        );
+        // The generic procedural filter and the unsupported operator are skipped.
+        assert_eq!(stats.cosmetic, 3);
+        assert_eq!(stats.unsupported, 2);
+        let e = b.build();
+
+        let sources = |host: &str, complex: bool| -> Vec<String> {
+            e.cosmetic_filters(host, &[], &[], complex)
+                .procedural
+                .into_iter()
+                .map(|p| p.source)
+                .collect()
+        };
+        assert_eq!(
+            sources("shop.example", true),
+            vec![".card:has-text(Sponsored)", ".row:xpath(..)"]
+        );
+        // Subdomains inherit; other sites do not.
+        assert_eq!(sources("www.shop.example", true).len(), 2);
+        assert!(sources("other.example", true).is_empty());
+        // Entity patterns (`news.*`).
+        assert_eq!(sources("news.com", true), vec![".promo:has-text(/ad/i)"]);
+        assert_eq!(sources("news.co.uk", true).len(), 1);
+        // Sent only with the once-per-frame request.
+        assert!(sources("shop.example", false).is_empty());
+        // Procedural filters are not mixed into the plain CSS selectors.
+        assert!(
+            e.cosmetic_filters("shop.example", &[], &[], true)
+                .selectors
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn procedural_exceptions_and_specifichide() {
+        let e = Engine::from_rules(
+            "shop.example##.card:has-text(Sponsored)\n\
+             shop.example##.row:xpath(..)\n\
+             vip.shop.example#@#.card:has-text(Sponsored)\n",
+        );
+        let n = |host: &str| e.cosmetic_filters(host, &[], &[], true).procedural.len();
+        assert_eq!(n("shop.example"), 2);
+        // The exception applies to vip.shop.example only, and only to its filter.
+        assert_eq!(n("vip.shop.example"), 1);
+
+        let e = Engine::from_rules(
+            "shop.example##.card:has-text(Sponsored)\n\
+             @@||shop.example^$specifichide\n",
+        );
+        assert!(
+            e.cosmetic_filters("shop.example", &[], &[], true)
+                .procedural
+                .is_empty()
         );
     }
 
