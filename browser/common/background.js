@@ -1,9 +1,9 @@
 /*
- * AdBlock extension background script (Chromium MV3 service worker and
+ * FuckAds extension background script (Chromium MV3 service worker and
  * Firefox MV3 background script).
  *
- * - Connects to the AdBlock service through native messaging
- *   (com.adblock.native). The service owns the filter lists; the extension
+ * - Connects to the FuckAds service through native messaging
+ *   (com.fuckads.native). The service owns the filter lists; the extension
  *   ships none and never downloads anything itself.
  * - Installs network rules as declarativeNetRequest dynamic rules, evaluated
  *   by the browser itself: no request data leaves the browser.
@@ -21,14 +21,14 @@ if (typeof importScripts === 'function') {
 }
 
 const api = globalThis.browser ?? globalThis.chrome;
-const HOST = 'com.adblock.native';
+const HOST = 'com.fuckads.native';
 const IS_FIREFOX = typeof globalThis.browser !== 'undefined' && navigator.userAgent.includes('Firefox');
 const BROWSER_NAME = IS_FIREFOX ? 'Firefox' : navigator.userAgentData?.brands?.find((b) => !/Not|Chromium/.test(b.brand))?.brand ?? 'Chromium';
 
 /** DNR rule IDs at or above this value are per-site pauses set from the popup. */
 const SITE_RULE_BASE = 9_000_000;
-const SYNC_ALARM = 'adblock-sync';
-const SCRIPTLET_SCRIPT_ID = 'adblock-scriptlets';
+const SYNC_ALARM = 'fuck-ads-sync';
+const SCRIPTLET_SCRIPT_ID = 'fuck-ads-scriptlets';
 
 // ---------------------------------------------------------------------------
 // Native messaging
@@ -71,7 +71,7 @@ function call(request, timeoutMs = 30_000) {
     }
     const id = nextId++;
     const timer = setTimeout(() => {
-      if (pending.delete(id)) reject(new Error('timed out waiting for the AdBlock service'));
+      if (pending.delete(id)) reject(new Error('timed out waiting for the FuckAds service'));
     }, timeoutMs);
     pending.set(id, { resolve, reject, timer });
     port.postMessage({ id, request });
@@ -149,7 +149,7 @@ async function installNetworkRules(rules, pausedSites) {
   }));
   const budget = Math.max(0, limit - siteRules.length);
   const rejected = await addRulesResilient([...siteRules, ...rules.slice(0, budget)]);
-  if (rejected > 0) console.warn(`AdBlock: browser rejected ${rejected} rules`);
+  if (rejected > 0) console.warn(`FuckAds: browser rejected ${rejected} rules`);
 }
 
 // ---------------------------------------------------------------------------
@@ -161,7 +161,7 @@ let userScriptsActive = false;
 
 function scriptletCode(bundle) {
   // Data is embedded as a JSON literal; only built-in functions run.
-  return `(${adblockScriptletRuntime.toString()})(${JSON.stringify(bundle)});`;
+  return `(${fuckAdsScriptletRuntime.toString()})(${JSON.stringify(bundle)});`;
 }
 
 async function registerScriptlets(bundle, pausedSites) {
@@ -206,7 +206,7 @@ api.webNavigation.onCommitted.addListener((details) => {
       target: { tabId: details.tabId, frameIds: [details.frameId] },
       world: 'MAIN',
       injectImmediately: true,
-      func: adblockScriptletRuntime,
+      func: fuckAdsScriptletRuntime,
       args: [scriptletBundle],
     })
     .catch(() => {});
@@ -228,7 +228,7 @@ const debounceRecent = new Map(); // tabId -> timestamps of recent redirects
  */
 api.webNavigation.onBeforeNavigate.addListener((details) => {
   if (details.frameId !== 0) return;
-  const target = adblockDebounce(details.url);
+  const target = fuckAdsDebounce(details.url);
   if (!target) return;
   // Guard against ping-pong with a site that redirects back.
   const now = Date.now();

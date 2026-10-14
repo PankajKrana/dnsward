@@ -1,7 +1,7 @@
 //! End-to-end DNS behaviour against an in-process daemon and a mock upstream.
 
-use adblock_config::BlockingMode;
-use adblock_tests::*;
+use fuck_ads_config::BlockingMode;
+use fuck_ads_tests::*;
 use hickory_proto::op::ResponseCode;
 use hickory_proto::rr::{RData, RecordType};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
@@ -188,10 +188,10 @@ async fn local_names_never_leave_the_machine() {
     assert_eq!(r.metadata.response_code, ResponseCode::NXDomain);
     let r = query(dns, "localhost.", RecordType::A).await.unwrap();
     assert_eq!(first_ip(&r), Some(IpAddr::V4(Ipv4Addr::LOCALHOST)));
-    let r = query(dns, "adblock-probe.test.", RecordType::A)
+    let r = query(dns, "fuck-ads-probe.test.", RecordType::A)
         .await
         .unwrap();
-    assert_eq!(first_ip(&r), Some(IpAddr::V4(adblock_dns::PROBE_ADDR)));
+    assert_eq!(first_ip(&r), Some(IpAddr::V4(fuck_ads_dns::PROBE_ADDR)));
     assert_eq!(
         env.upstream.count(),
         before,

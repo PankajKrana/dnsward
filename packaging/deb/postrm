@@ -1,8 +1,8 @@
 #!/bin/sh
 set -e
 if [ "$1" = "purge" ]; then
-    rm -rf /var/lib/adblock /etc/adblock
-    getent passwd adblock >/dev/null && deluser --system adblock >/dev/null 2>&1 || true
+    rm -rf /var/lib/fuck-ads /etc/fuck-ads
+    getent passwd fuck-ads >/dev/null && deluser --system fuck-ads >/dev/null 2>&1 || true
 fi
 systemctl daemon-reload >/dev/null 2>&1 || true
 exit 0

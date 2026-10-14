@@ -9,7 +9,7 @@ const path = require('node:path');
 const ctx = { URL, atob };
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'common', 'debounce.js'), 'utf8'), ctx);
-const debounce = (url) => ctx.adblockDebounce(url);
+const debounce = (url) => ctx.fuckAdsDebounce(url);
 const enc = encodeURIComponent;
 const dest = 'https://example.com/a?x=1&y=2#frag';
 

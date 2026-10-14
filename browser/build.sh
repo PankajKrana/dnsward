@@ -12,7 +12,7 @@ for target in chromium firefox; do
     cp -R common/. "$out/"
     cp "$target/manifest.json" "$out/manifest.json"
     if command -v zip >/dev/null 2>&1; then
-        (cd "$out" && zip -qr "../adblock-$target.zip" .)
+        (cd "$out" && zip -qr "../fuck-ads-$target.zip" .)
     fi
     echo "built $out"
 done

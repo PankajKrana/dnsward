@@ -1,6 +1,6 @@
 # Security and threat model
 
-AdBlock runs a network service, changes system DNS settings, and processes
+FuckAds runs a network service, changes system DNS settings, and processes
 data downloaded from the Internet. It is treated as security-sensitive
 software.
 
@@ -10,7 +10,7 @@ software.
    effectively offline. If it is subverted, traffic can be redirected.
 2. **Privacy of browsing activity.** DNS queries reveal which sites a user
    visits.
-3. **Integrity of the host.** AdBlock has root during setup and runs a
+3. **Integrity of the host.** FuckAds has root during setup and runs a
    long-lived daemon.
 4. **Integrity of web pages.** The extension injects CSS and scriptlets into
    pages.
@@ -27,8 +27,8 @@ software.
 | Local users → control socket | Unprivileged users changing settings or reading data | Kernel-verified peer credentials (`SO_PEERCRED` / `getpeereid`); state-changing requests only from root or the service account; 256 KiB request limit; 64 concurrent connections; bounded per-request work |
 | Browser → native host | A malicious web page or extension | Only allowlisted extension IDs may start the host (enforced by the browser via the manifest); the host forwards only read-only requests; 1 MiB message caps |
 | Daemon → root CLI | A compromised daemon trying to escalate | The daemon runs unprivileged. Root-owned DNS backups (0600) live outside the daemon's writable directory. Root writes into system DNS settings only addresses from the root-owned configuration that are loopback addresses. |
-| Apps → system resolver | Software with a hardcoded resolver or DNS-over-HTTPS that skips AdBlock | Optional `adblock enforce-dns`: firewall rules (pf anchor on macOS, a dedicated nftables table on Linux) that *reject* public port 53/853 and well-known DoH addresses for all accounts except the service account. Never redirects; private, loopback and VPN ranges are untouched; validated before loading; requires system DNS to already use AdBlock; verified afterwards and rolled back on failure; removed before DNS settings are restored. Lost at reboot by design. |
-| Local apps → filtering proxy (optional) | A local process using the proxy as a relay into local or private services, request smuggling, resource exhaustion | Listener is loopback-only and cannot be configured otherwise; peers must be loopback; targets resolving to loopback, private, link-local, CGNAT or other special-use addresses are refused (including IPv4-mapped/NAT64 forms); strict single-request head parsing with a 16 KiB limit and no obsolete folding; plain HTTP is forced to one request per connection; HTTPS is tunnelled opaquely (never decrypted, no certificate); connection cap and timeouts; allowed hostnames and URLs are never logged or stored. `adblock proxy on` (macOS) only writes a validated loopback PAC URL, saves the previous settings first, verifies, rolls back on failure and is undone by `off`, `stop`, `disable` and `uninstall`. |
+| Apps → system resolver | Software with a hardcoded resolver or DNS-over-HTTPS that skips FuckAds | Optional `fuck-ads enforce-dns`: firewall rules (pf anchor on macOS, a dedicated nftables table on Linux) that *reject* public port 53/853 and well-known DoH addresses for all accounts except the service account. Never redirects; private, loopback and VPN ranges are untouched; validated before loading; requires system DNS to already use FuckAds; verified afterwards and rolled back on failure; removed before DNS settings are restored. Lost at reboot by design. |
+| Local apps → filtering proxy (optional) | A local process using the proxy as a relay into local or private services, request smuggling, resource exhaustion | Listener is loopback-only and cannot be configured otherwise; peers must be loopback; targets resolving to loopback, private, link-local, CGNAT or other special-use addresses are refused (including IPv4-mapped/NAT64 forms); strict single-request head parsing with a 16 KiB limit and no obsolete folding; plain HTTP is forced to one request per connection; HTTPS is tunnelled opaquely (never decrypted, no certificate); connection cap and timeouts; allowed hostnames and URLs are never logged or stored. `fuck-ads proxy on` (macOS) only writes a validated loopback PAC URL, saves the previous settings first, verifies, rolls back on failure and is undone by `off`, `stop`, `disable` and `uninstall`. |
 | Installer → system | Supply chain, path tricks | Release archives verified against SHA-256 before install; no shell evaluation of downloaded data; service files rendered with a path validator; uninstall deletes only hard-coded locations, never configurable paths |
 
 ## Privilege model
@@ -40,7 +40,7 @@ software.
   macOS refuses to let a non-root user bind port 53 on a specific address
   such as 127.0.0.1, so the LaunchDaemon starts as root and the daemon binds
   its DNS sockets first, then immediately switches to the unprivileged
-  `_adblock` account (clearing supplementary groups, setting gid then uid, and
+  `_fuck-ads` account (clearing supplementary groups, setting gid then uid, and
   verifying that root cannot be regained) before it reads any file, list or
   network input. The only code that runs as root is the configuration load and
   the socket bind.
@@ -70,7 +70,7 @@ clients have URLs stripped. See [privacy.md](privacy.md).
 ## Accepted risks and known limitations
 
 * **Read-only status is visible to all local users,** including "top blocked
-  domains" in `adblock stats`. On shared machines, set
+  domains" in `fuck-ads stats`. On shared machines, set
   `stats.record_blocked_domains = false`.
 * **Filter lists are trusted to decide what to block.** A malicious list can
   break sites (blocking is limited to filtering; it can never execute code or

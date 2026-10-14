@@ -1,9 +1,9 @@
 /*
- * AdBlock content script (isolated world, every frame, document_start).
+ * FuckAds content script (isolated world, every frame, document_start).
  *
  * Collects the class and id names present in the page and asks the
  * background script for matching cosmetic filters. Only these tokens and
- * the frame's hostname are sent, and only to the local AdBlock service.
+ * the frame's hostname are sent, and only to the local FuckAds service.
  */
 (() => {
   'use strict';

@@ -1,0 +1,131 @@
+# FuckAds configuration
+#
+# Linux:  /etc/fuck-ads/config.toml
+# macOS:  /Library/Application Support/FuckAds/config.toml
+#
+# After editing, apply with:   sudo fuck-ads restart
+# Check the file with:          fuck-ads config validate
+#
+# Every value below is the built-in default; delete any line to keep the
+# default. Unknown keys are rejected so typos do not go unnoticed.
+
+[general]
+enabled = true
+log_level = "info"            # error | warn | info | debug | trace
+
+[dns]
+enabled = true
+# Loopback only by default. Port 53 is required for the OS resolver to use it.
+listen = ["127.0.0.1:53", "[::1]:53"]
+# DNS-over-HTTPS upstreams (encrypted). Plain resolvers ("9.9.9.9") also work.
+upstreams = [
+    "https://cloudflare-dns.com/dns-query",
+    "https://dns.google/dns-query",
+]
+# Used ONLY to look up the DoH hostnames above, never for normal queries.
+bootstrap = ["1.1.1.1", "8.8.8.8", "2606:4700:4700::1111"]
+blocking_mode = "null"        # null (0.0.0.0 / ::) | nxdomain | refused
+blocked_ttl = 60
+cache_size = 10000
+cache_min_ttl = 0
+cache_max_ttl = 86400
+timeout_ms = 3000
+max_concurrent = 1024
+# Answer reverse lookups for private IPs locally instead of leaking them.
+block_private_ptr = true
+allow_non_loopback = false
+
+# Send local network names to your router, e.g.:
+# [dns.forward_zones]
+# "lan" = ["192.168.1.1"]
+# "168.192.in-addr.arpa" = ["192.168.1.1"]
+[dns.forward_zones]
+
+[filters]
+enabled = true
+auto_update = true
+update_interval_hours = 12
+max_list_size_mb = 32
+
+[[filters.lists]]
+name = "easylist"
+url = "https://easylist.to/easylist/easylist.txt"
+category = "ads"
+format = "adblock"
+enabled = true
+min_rules = 10
+
+[[filters.lists]]
+name = "easyprivacy"
+url = "https://easylist.to/easylist/easyprivacy.txt"
+category = "trackers"
+format = "adblock"
+enabled = true
+min_rules = 10
+
+[[filters.lists]]
+name = "ublock-filters"
+url = "https://ublockorigin.github.io/uAssets/filters/filters.txt"
+category = "ads"
+format = "adblock"
+enabled = true
+min_rules = 10
+
+[[filters.lists]]
+name = "peter-lowe"
+url = "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext"
+category = "ads"
+format = "hosts"
+enabled = true
+min_rules = 10
+
+# Small bundled list so blocking works before the first download.
+[[filters.lists]]
+name = "baseline"
+bundled = "baseline.txt"
+category = "ads"
+format = "auto"
+enabled = true
+min_rules = 1
+
+# YouTube compatibility rules. To receive updates without upgrading FuckAds,
+# add:  url = "https://<your-host>/youtube.txt"
+[[filters.lists]]
+name = "youtube"
+bundled = "youtube.txt"
+category = "ads"
+format = "adblock"
+enabled = true
+min_rules = 1
+
+[browser]
+enabled = true
+max_dnr_rules = 30000
+
+# Optional local filtering proxy. Off by default. It filters HTTPS tunnels by
+# hostname (the encrypted bytes are never read) and plain http:// requests by
+# URL. Point a client at http://127.0.0.1:8118/proxy.pac to use it.
+[proxy]
+enabled = false
+listen = ["127.0.0.1:8118"]   # loopback only
+ports = [80, 443, 8080, 8443]
+max_connections = 512
+
+[stats]
+enabled = true
+# Count *blocked* domains for "top blocked" output. Visited (allowed) domains
+# are never recorded.
+record_blocked_domains = true
+retention_days = 30
+
+[privacy]
+telemetry = false             # FuckAds has no telemetry; must stay false
+log_blocked = false           # log blocked hostnames at debug level
+
+# Administrator rules, in addition to `fuck-ads allow` / `fuck-ads block`.
+[custom]
+allow = []
+block = []
+rules = []
+
+[paths]

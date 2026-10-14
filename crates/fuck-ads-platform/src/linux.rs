@@ -1,0 +1,433 @@
+//! Linux: systemd service management and system DNS configuration.
+//!
+//! DNS strategies, in order of preference:
+//!
+//! 1. **systemd-resolved** (Ubuntu, Fedora, Arch with resolved, ...): a
+//!    drop-in sets FuckAds as the global DNS server with routing domain `~.`.
+//!    resolved keeps handling mDNS/LLMNR, split DNS for VPNs, etc.
+//! 2. **NetworkManager without resolved**: NetworkManager is told to stop
+//!    writing `/etc/resolv.conf` (`dns=none`), which is then rewritten.
+//! 3. **Plain `/etc/resolv.conf`**: backed up and rewritten.
+//!
+//! Every change is recorded first, so `disable` restores the exact previous
+//! state (including resolv.conf symlinks).
+
+use crate::cmd::{find_tool, run, stdout, succeeds};
+use crate::firewall::{FirewallPlan, FirewallState, NFT_TABLE, render_nft};
+use crate::{
+    DnsBackup, DnsConfigState, LogSource, Platform, ResolvBackup, SERVICE_USER_LINUX, SYSTEMD_UNIT,
+    ServiceStatus, render_resolv_conf, resolver_addresses,
+};
+use anyhow::{Context, Result, bail};
+use std::net::SocketAddr;
+use std::path::{Path, PathBuf};
+
+const RESOLV_CONF: &str = "/etc/resolv.conf";
+const RESOLVED_DROPIN_DIR: &str = "/etc/systemd/resolved.conf.d";
+const RESOLVED_DROPIN: &str = "/etc/systemd/resolved.conf.d/90-fuck-ads.conf";
+const NM_DROPIN_DIR: &str = "/etc/NetworkManager/conf.d";
+const NM_DROPIN: &str = "/etc/NetworkManager/conf.d/90-fuck-ads.conf";
+
+const NFT_RULES_FILE: &str = "/etc/fuck-ads/enforce-dns.nft";
+
+fn nft() -> Result<&'static str> {
+    find_tool(&["/usr/sbin/nft", "/sbin/nft", "/usr/bin/nft"])
+        .context("nft not found: DNS bypass protection needs nftables")
+}
+
+const UNIT_PATHS: &[&str] = &[
+    "/etc/systemd/system/fuck-ads.service",
+    "/usr/lib/systemd/system/fuck-ads.service",
+    "/lib/systemd/system/fuck-ads.service",
+];
+
+#[derive(Debug, Default)]
+pub struct Linux;
+
+fn systemctl() -> Result<&'static str> {
+    find_tool(&["/usr/bin/systemctl", "/bin/systemctl"])
+        .context("systemctl not found: FuckAds requires systemd on Linux")
+}
+
+fn unit_active(unit: &str) -> bool {
+    systemctl()
+        .map(|s| succeeds(s, &["is-active", "--quiet", unit]))
+        .unwrap_or(false)
+}
+
+/// Whether glibc's resolver goes through systemd-resolved's stub.
+fn resolv_conf_uses_resolved() -> bool {
+    match std::fs::read_link(RESOLV_CONF) {
+        Ok(target) => target.to_string_lossy().contains("systemd/resolve"),
+        Err(_) => std::fs::read_to_string(RESOLV_CONF)
+            .map(|c| c.lines().any(|l| l.trim() == "nameserver 127.0.0.53"))
+            .unwrap_or(false),
+    }
+}
+
+fn backup_resolv_conf() -> Result<ResolvBackup> {
+    let path = Path::new(RESOLV_CONF);
+    if let Ok(target) = std::fs::read_link(path) {
+        return Ok(ResolvBackup {
+            symlink: Some(target),
+            content: None,
+        });
+    }
+    match std::fs::read_to_string(path) {
+        Ok(content) => Ok(ResolvBackup {
+            symlink: None,
+            content: Some(content),
+        }),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(ResolvBackup::default()),
+        Err(e) => Err(e).context("cannot read /etc/resolv.conf"),
+    }
+}
+
+fn write_resolv_conf(listen: &[SocketAddr]) -> Result<()> {
+    let path = Path::new(RESOLV_CONF);
+    // Replace a symlink with a regular file instead of writing through it.
+    if std::fs::symlink_metadata(path)
+        .map(|m| m.file_type().is_symlink())
+        .unwrap_or(false)
+    {
+        std::fs::remove_file(path).context("cannot replace /etc/resolv.conf symlink")?;
+    }
+    fuck_ads_config::fs::write_atomic(path, render_resolv_conf(listen).as_bytes(), 0o644)
+        .context("cannot write /etc/resolv.conf")
+}
+
+fn restore_resolv_conf(backup: &ResolvBackup) -> Result<()> {
+    let path = Path::new(RESOLV_CONF);
+    if let Some(target) = &backup.symlink {
+        let _ = std::fs::remove_file(path);
+        std::os::unix::fs::symlink(target, path)
+            .context("cannot restore /etc/resolv.conf symlink")?;
+    } else if let Some(content) = &backup.content {
+        if std::fs::symlink_metadata(path)
+            .map(|m| m.file_type().is_symlink())
+            .unwrap_or(false)
+        {
+            std::fs::remove_file(path)?;
+        }
+        fuck_ads_config::fs::write_atomic(path, content.as_bytes(), 0o644)
+            .context("cannot restore /etc/resolv.conf")?;
+    } else {
+        let _ = std::fs::remove_file(path);
+    }
+    Ok(())
+}
+
+fn resolved_server_list(listen: &[SocketAddr]) -> String {
+    resolver_addresses(listen)
+        .iter()
+        .map(|a| match (a.port(), a) {
+            (53, _) => a.ip().to_string(),
+            (_, SocketAddr::V4(v4)) => v4.to_string(),
+            (_, SocketAddr::V6(v6)) => format!("[{}]:{}", v6.ip(), v6.port()),
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+impl Platform for Linux {
+    fn name(&self) -> &'static str {
+        "Linux"
+    }
+
+    fn service_file(&self) -> PathBuf {
+        UNIT_PATHS
+            .iter()
+            .map(PathBuf::from)
+            .find(|p| p.exists())
+            .unwrap_or_else(|| PathBuf::from(UNIT_PATHS[0]))
+    }
+
+    fn service_status(&self) -> ServiceStatus {
+        if !UNIT_PATHS.iter().any(|p| Path::new(p).exists()) {
+            return ServiceStatus::NotInstalled;
+        }
+        if unit_active(SYSTEMD_UNIT) {
+            ServiceStatus::Running
+        } else {
+            ServiceStatus::Stopped
+        }
+    }
+
+    fn service_start(&self) -> Result<()> {
+        if self.service_status() == ServiceStatus::NotInstalled {
+            bail!("the fuck-ads service is not installed; run the installer first");
+        }
+        let sc = systemctl()?;
+        run(sc, &["daemon-reload"])?;
+        run(sc, &["enable", "--now", SYSTEMD_UNIT]).context(
+            "the service failed to start; see `fuck-ads logs` or `journalctl -u fuck-ads.service`",
+        )?;
+        Ok(())
+    }
+
+    fn service_stop(&self) -> Result<()> {
+        if self.service_status() == ServiceStatus::NotInstalled {
+            return Ok(());
+        }
+        run(systemctl()?, &["disable", "--now", SYSTEMD_UNIT])?;
+        Ok(())
+    }
+
+    fn service_restart(&self) -> Result<()> {
+        run(systemctl()?, &["restart", SYSTEMD_UNIT])?;
+        Ok(())
+    }
+
+    fn plan_dns(&self, listen: &[SocketAddr]) -> Result<DnsBackup> {
+        if resolver_addresses(listen).is_empty() {
+            bail!("dns.listen has no loopback address the system resolver could use");
+        }
+        if unit_active("systemd-resolved.service") && resolv_conf_uses_resolved() {
+            return Ok(DnsBackup::Resolved {
+                dropin: RESOLVED_DROPIN.into(),
+            });
+        }
+        // resolv.conf cannot express ports.
+        if listen.iter().any(|a| a.port() != 53) {
+            bail!(
+                "this system does not use systemd-resolved, so /etc/resolv.conf must point at \
+                 port 53; set dns.listen = [\"127.0.0.1:53\", \"[::1]:53\"] in the configuration"
+            );
+        }
+        let resolv = backup_resolv_conf()?;
+        if unit_active("NetworkManager.service") {
+            return Ok(DnsBackup::NetworkManager {
+                dropin: NM_DROPIN.into(),
+                resolv,
+            });
+        }
+        Ok(DnsBackup::ResolvConf { resolv })
+    }
+
+    fn apply_dns(&self, plan: &DnsBackup, listen: &[SocketAddr]) -> Result<()> {
+        match plan {
+            DnsBackup::Resolved { dropin } => {
+                fuck_ads_config::fs::ensure_dir(Path::new(RESOLVED_DROPIN_DIR), 0o755)?;
+                let content = format!(
+                    "# Managed by FuckAds. Remove with `sudo fuck-ads disable`.\n\
+                     [Resolve]\n\
+                     DNS={}\n\
+                     Domains=~.\n\
+                     DNSOverTLS=no\n",
+                    resolved_server_list(listen)
+                );
+                fuck_ads_config::fs::write_atomic(dropin, content.as_bytes(), 0o644)
+                    .context("cannot write systemd-resolved drop-in")?;
+                run(systemctl()?, &["restart", "systemd-resolved.service"])?;
+            }
+            DnsBackup::NetworkManager { dropin, .. } => {
+                fuck_ads_config::fs::ensure_dir(Path::new(NM_DROPIN_DIR), 0o755)?;
+                let content = "# Managed by FuckAds. Remove with `sudo fuck-ads disable`.\n[main]\ndns=none\n";
+                fuck_ads_config::fs::write_atomic(dropin, content.as_bytes(), 0o644)
+                    .context("cannot write NetworkManager drop-in")?;
+                run(systemctl()?, &["reload", "NetworkManager.service"])?;
+                write_resolv_conf(listen)?;
+            }
+            DnsBackup::ResolvConf { .. } => write_resolv_conf(listen)?,
+            DnsBackup::MacOs { .. } => bail!("macOS DNS backup on Linux"),
+        }
+        Ok(())
+    }
+
+    fn restore_dns(&self, backup: &DnsBackup) -> Result<()> {
+        match backup {
+            DnsBackup::Resolved { dropin } => {
+                if dropin.exists() {
+                    std::fs::remove_file(dropin)
+                        .context("cannot remove systemd-resolved drop-in")?;
+                }
+                if unit_active("systemd-resolved.service") {
+                    run(systemctl()?, &["restart", "systemd-resolved.service"])?;
+                }
+            }
+            DnsBackup::NetworkManager { dropin, resolv } => {
+                restore_resolv_conf(resolv)?;
+                if dropin.exists() {
+                    std::fs::remove_file(dropin).context("cannot remove NetworkManager drop-in")?;
+                }
+                if unit_active("NetworkManager.service") {
+                    run(systemctl()?, &["reload", "NetworkManager.service"])?;
+                }
+            }
+            DnsBackup::ResolvConf { resolv } => restore_resolv_conf(resolv)?,
+            DnsBackup::MacOs { .. } => bail!("macOS DNS backup on Linux"),
+        }
+        Ok(())
+    }
+
+    fn dns_config_state(&self, listen: &[SocketAddr]) -> DnsConfigState {
+        let addrs = resolver_addresses(listen);
+        if resolv_conf_uses_resolved() {
+            if let Ok(dropin) = std::fs::read_to_string(RESOLVED_DROPIN)
+                && addrs.iter().any(|a| dropin.contains(&a.ip().to_string()))
+            {
+                return DnsConfigState::Active;
+            }
+            return DnsConfigState::Inactive(
+                "systemd-resolved is not configured to use FuckAds".into(),
+            );
+        }
+        let content = std::fs::read_to_string(RESOLV_CONF).unwrap_or_default();
+        let servers: Vec<&str> = content
+            .lines()
+            .filter_map(|l| l.trim().strip_prefix("nameserver"))
+            .map(str::trim)
+            .collect();
+        if !servers.is_empty()
+            && servers
+                .iter()
+                .all(|s| addrs.iter().any(|a| a.ip().to_string() == *s))
+        {
+            DnsConfigState::Active
+        } else {
+            DnsConfigState::Inactive(format!("/etc/resolv.conf uses {}", servers.join(", ")))
+        }
+    }
+
+    fn firewall_rules(&self, plan: &FirewallPlan) -> Option<String> {
+        Some(render_nft(plan))
+    }
+
+    fn firewall_apply(&self, plan: &FirewallPlan) -> Result<FirewallState> {
+        let nft = nft()?;
+        let file = Path::new(NFT_RULES_FILE);
+        if let Some(dir) = file.parent() {
+            fuck_ads_config::fs::ensure_dir(dir, 0o755)?;
+        }
+        fuck_ads_config::fs::write_atomic(file, render_nft(plan).as_bytes(), 0o644)
+            .context("cannot write the nftables rules file")?;
+        // Check-only pass first: nothing is loaded unless the rules are valid.
+        run(nft, &["-c", "-f", NFT_RULES_FILE]).context("nftables rejected the generated rules")?;
+        run(nft, &["-f", NFT_RULES_FILE]).context("could not load the FuckAds nftables table")?;
+        Ok(FirewallState::default())
+    }
+
+    fn firewall_remove(&self, _state: &FirewallState) -> Result<()> {
+        let nft = nft()?;
+        // Only our own table; a missing table means there is nothing to undo.
+        if succeeds(nft, &["list", "table", "inet", NFT_TABLE]) {
+            run(nft, &["delete", "table", "inet", NFT_TABLE])?;
+        }
+        let _ = std::fs::remove_file(NFT_RULES_FILE);
+        Ok(())
+    }
+
+    fn firewall_active(&self) -> bool {
+        nft()
+            .map(|n| succeeds(n, &["list", "table", "inet", NFT_TABLE]))
+            .unwrap_or(false)
+    }
+
+    fn flush_dns_cache(&self) {
+        if let Some(resolvectl) = find_tool(&["/usr/bin/resolvectl", "/bin/resolvectl"]) {
+            let _ = run(resolvectl, &["flush-caches"]);
+        }
+    }
+
+    fn log_source(&self, _paths: &fuck_ads_config::Paths, follow: bool, lines: usize) -> LogSource {
+        let journalctl =
+            find_tool(&["/usr/bin/journalctl", "/bin/journalctl"]).unwrap_or("journalctl");
+        let mut args = vec![
+            "-u".to_string(),
+            SYSTEMD_UNIT.to_string(),
+            "-n".to_string(),
+            lines.to_string(),
+            "--no-pager".to_string(),
+            "-o".to_string(),
+            "short-iso".to_string(),
+        ];
+        if follow {
+            args.push("-f".into());
+        }
+        LogSource::Command(journalctl.to_string(), args)
+    }
+
+    fn install_service(&self, exe: &Path) -> Result<()> {
+        const TEMPLATE: &str = include_str!("../../../platforms/linux/fuck-ads.service");
+        if crate::user_ids(SERVICE_USER_LINUX).is_none() {
+            let nologin = find_tool(&["/usr/sbin/nologin", "/sbin/nologin", "/bin/false"])
+                .unwrap_or("/bin/false");
+            if let Some(useradd) = find_tool(&["/usr/sbin/useradd", "/sbin/useradd"]) {
+                run(
+                    useradd,
+                    &[
+                        "--system",
+                        "--no-create-home",
+                        "--home-dir",
+                        "/var/lib/fuck-ads",
+                        "--shell",
+                        nologin,
+                        SERVICE_USER_LINUX,
+                    ],
+                )?;
+            } else if let Some(adduser) = find_tool(&["/usr/sbin/adduser", "/sbin/adduser"]) {
+                run(
+                    adduser,
+                    &[
+                        "-S",
+                        "-D",
+                        "-H",
+                        "-h",
+                        "/var/lib/fuck-ads",
+                        "-s",
+                        nologin,
+                        SERVICE_USER_LINUX,
+                    ],
+                )?;
+            } else {
+                bail!(
+                    "cannot create the '{SERVICE_USER_LINUX}' service account (no useradd/adduser)"
+                );
+            }
+        }
+        let (uid, gid) = crate::user_ids(SERVICE_USER_LINUX)
+            .context("service account missing after creation")?;
+        fuck_ads_config::fs::ensure_dir(Path::new("/var/lib/fuck-ads"), 0o755)?;
+        fuck_ads_config::fs::ensure_dir(Path::new("/var/lib/fuck-ads/data"), 0o755)?;
+        crate::chown(Path::new("/var/lib/fuck-ads/data"), uid, gid)?;
+        crate::ensure_default_config(Path::new("/etc/fuck-ads/config.toml"))?;
+        if !UNIT_PATHS[1..].iter().any(|p| Path::new(p).exists()) {
+            let unit = crate::render_service_template(TEMPLATE, exe)?;
+            fuck_ads_config::fs::write_atomic(Path::new(UNIT_PATHS[0]), unit.as_bytes(), 0o644)?;
+        }
+        run(systemctl()?, &["daemon-reload"])?;
+        Ok(())
+    }
+
+    fn remove_service(&self) -> Result<()> {
+        let _ = self.service_stop();
+        for p in UNIT_PATHS {
+            if Path::new(p).exists() {
+                std::fs::remove_file(p).with_context(|| format!("cannot remove {p}"))?;
+            }
+        }
+        if let Ok(sc) = systemctl() {
+            let _ = run(sc, &["daemon-reload"]);
+        }
+        if let Some(userdel) = find_tool(&["/usr/sbin/userdel", "/sbin/userdel"])
+            && stdout("/usr/bin/id", &["-u", SERVICE_USER_LINUX]).is_ok()
+        {
+            let _ = run(userdel, &[SERVICE_USER_LINUX]);
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolved_server_formatting() {
+        let l: Vec<SocketAddr> = vec![
+            "127.0.0.1:53".parse().unwrap(),
+            "[::1]:5353".parse().unwrap(),
+        ];
+        assert_eq!(resolved_server_list(&l), "127.0.0.1 [::1]:5353");
+    }
+}

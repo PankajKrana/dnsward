@@ -15,7 +15,7 @@
  */
 'use strict';
 
-const ADBLOCK_DEBOUNCE_RULES = [
+const FUCK_ADS_DEBOUNCE_RULES = [
   { host: /^(www\.)?google\.[a-z]{2,3}(\.[a-z]{2})?$/, path: '/url', params: ['q', 'url'] },
   { host: /^(l|lm)\.facebook\.com$/, path: '/l.php', params: ['u'] },
   { host: /^l\.messenger\.com$/, path: '/l.php', params: ['u'] },
@@ -34,10 +34,10 @@ const ADBLOCK_DEBOUNCE_RULES = [
   { host: /^[a-z0-9-]+\.safelinks\.protection\.outlook\.com$/, pathPrefix: '/', params: ['url'] },
 ];
 
-const ADBLOCK_DEBOUNCE_MAX_URL = 4096;
-const ADBLOCK_DEBOUNCE_MAX_HOPS = 3;
+const FUCK_ADS_DEBOUNCE_MAX_URL = 4096;
+const FUCK_ADS_DEBOUNCE_MAX_HOPS = 3;
 
-function adblockDebounceDecode(value, rule) {
+function fuckAdsDebounceDecode(value, rule) {
   if (!rule.base64) return value;
   const { prefix } = rule.base64;
   if (!value.startsWith(prefix)) return null;
@@ -51,8 +51,8 @@ function adblockDebounceDecode(value, rule) {
 }
 
 /** One hop: the destination carried by `url`, or null. */
-function adblockDebounceStep(url) {
-  if (typeof url !== 'string' || url.length > ADBLOCK_DEBOUNCE_MAX_URL) return null;
+function fuckAdsDebounceStep(url) {
+  if (typeof url !== 'string' || url.length > FUCK_ADS_DEBOUNCE_MAX_URL) return null;
   let u;
   try {
     u = new URL(url);
@@ -61,14 +61,14 @@ function adblockDebounceStep(url) {
   }
   if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
   const host = u.hostname.toLowerCase();
-  for (const rule of ADBLOCK_DEBOUNCE_RULES) {
+  for (const rule of FUCK_ADS_DEBOUNCE_RULES) {
     if (!rule.host.test(host)) continue;
     if (rule.path !== undefined ? u.pathname !== rule.path : !u.pathname.startsWith(rule.pathPrefix)) continue;
     for (const name of rule.params) {
       const raw = u.searchParams.get(name);
       if (!raw) continue;
-      const value = adblockDebounceDecode(raw, rule);
-      if (!value || value.length > ADBLOCK_DEBOUNCE_MAX_URL) continue;
+      const value = fuckAdsDebounceDecode(raw, rule);
+      if (!value || value.length > FUCK_ADS_DEBOUNCE_MAX_URL) continue;
       let target;
       try {
         target = new URL(value);
@@ -88,11 +88,11 @@ function adblockDebounceStep(url) {
  * The final destination of a chain of redirectors (a Google link wrapping a
  * Facebook link wrapping the page), or null if `url` is not a redirector.
  */
-function adblockDebounce(url) {
+function fuckAdsDebounce(url) {
   let current = url;
   let changed = false;
-  for (let hop = 0; hop < ADBLOCK_DEBOUNCE_MAX_HOPS; hop++) {
-    const next = adblockDebounceStep(current);
+  for (let hop = 0; hop < FUCK_ADS_DEBOUNCE_MAX_HOPS; hop++) {
+    const next = fuckAdsDebounceStep(current);
     if (!next) break;
     current = next;
     changed = true;

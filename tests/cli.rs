@@ -1,17 +1,17 @@
 //! CLI parsing, rendering and end-to-end commands against a live daemon.
 
-use adblock_cli::cli::{Cli, Command};
-use adblock_cli::main_with_args;
-use adblock_cli::output::{DnsRouting, Style, render_rules, render_stats, render_status};
-use adblock_core::protocol::{ListStatus, Request, Response, StatsInfo, StatusInfo};
-use adblock_tests::TestEnv;
 use clap::Parser;
+use fuck_ads_cli::cli::{Cli, Command};
+use fuck_ads_cli::main_with_args;
+use fuck_ads_cli::output::{DnsRouting, Style, render_rules, render_stats, render_status};
+use fuck_ads_core::protocol::{ListStatus, Request, Response, StatsInfo, StatusInfo};
+use fuck_ads_tests::TestEnv;
 use std::ffi::OsString;
 use std::process::ExitCode;
 
 /// Runs the real entry point on a separate thread (it owns its runtime).
 fn run(args: &[&str]) -> ExitCode {
-    let args: Vec<OsString> = std::iter::once("adblock")
+    let args: Vec<OsString> = std::iter::once("fuck-ads")
         .chain(args.iter().copied())
         .map(OsString::from)
         .collect();
@@ -42,29 +42,29 @@ fn every_documented_command_parses() {
         "resume",
     ];
     for c in commands {
-        Cli::try_parse_from(["adblock", c]).unwrap_or_else(|e| panic!("{c}: {e}"));
+        Cli::try_parse_from(["fuck-ads", c]).unwrap_or_else(|e| panic!("{c}: {e}"));
     }
     for args in [
-        vec!["adblock", "allow", "example.com"],
-        vec!["adblock", "block", "example.com"],
-        vec!["adblock", "remove-allow", "example.com"],
-        vec!["adblock", "remove-block", "example.com"],
-        vec!["adblock", "stats", "reset"],
-        vec!["adblock", "logs", "--follow"],
-        vec!["adblock", "update", "--force"],
-        vec!["adblock", "proxy", "on"],
-        vec!["adblock", "proxy", "off"],
-        vec!["adblock", "proxy", "status"],
-        vec!["adblock", "proxy", "show"],
-        vec!["adblock", "enforce-dns", "on"],
-        vec!["adblock", "enforce-dns", "off"],
-        vec!["adblock", "enforce-dns", "status"],
-        vec!["adblock", "enforce-dns", "show"],
+        vec!["fuck-ads", "allow", "example.com"],
+        vec!["fuck-ads", "block", "example.com"],
+        vec!["fuck-ads", "remove-allow", "example.com"],
+        vec!["fuck-ads", "remove-block", "example.com"],
+        vec!["fuck-ads", "stats", "reset"],
+        vec!["fuck-ads", "logs", "--follow"],
+        vec!["fuck-ads", "update", "--force"],
+        vec!["fuck-ads", "proxy", "on"],
+        vec!["fuck-ads", "proxy", "off"],
+        vec!["fuck-ads", "proxy", "status"],
+        vec!["fuck-ads", "proxy", "show"],
+        vec!["fuck-ads", "enforce-dns", "on"],
+        vec!["fuck-ads", "enforce-dns", "off"],
+        vec!["fuck-ads", "enforce-dns", "status"],
+        vec!["fuck-ads", "enforce-dns", "show"],
     ] {
         Cli::try_parse_from(&args).unwrap_or_else(|e| panic!("{args:?}: {e}"));
     }
     assert!(matches!(
-        Cli::try_parse_from(["adblock", "allow", "x.com"])
+        Cli::try_parse_from(["fuck-ads", "allow", "x.com"])
             .unwrap()
             .command,
         Command::Allow(_)
@@ -88,7 +88,7 @@ fn status_output_matches_spec_layout() {
     };
     let out = render_status(&s, DnsRouting::Active, Style { color: false });
     let expected = [
-        "AdBlock",
+        "FuckAds",
         "Status:          ● Active",
         "Platform:        Linux",
         "DNS filtering:   ● Active",
@@ -160,7 +160,7 @@ async fn proxy_commands_report_the_running_proxy() {
     assert_eq!(call(&["--json", "proxy", "status"]), ExitCode::SUCCESS);
     assert_eq!(call(&["proxy", "show"]), ExitCode::SUCCESS);
     // Changing system settings needs root; refused otherwise.
-    if !adblock_platform::is_root() {
+    if !fuck_ads_platform::is_root() {
         assert_eq!(call(&["proxy", "on"]), ExitCode::FAILURE);
         assert_eq!(call(&["proxy", "off"]), ExitCode::FAILURE);
     }

@@ -1,8 +1,8 @@
 //! The local filtering proxy running inside the daemon, using the live
 //! filter lists and user rules.
 
-use adblock_core::protocol::{Request, Response};
-use adblock_tests::*;
+use fuck_ads_core::protocol::{Request, Response};
+use fuck_ads_tests::*;
 use std::net::SocketAddr;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};

@@ -1,8 +1,8 @@
 #![no_main]
 //! Building an engine from arbitrary lists and querying it must not panic,
 //! and exported browser rules must always serialize.
-use adblock_filter::export::{UserOverrides, dnr_rules, safari_content_blocker};
-use adblock_filter::{Engine, Request, ResourceType};
+use fuck_ads_filter::export::{UserOverrides, dnr_rules, safari_content_blocker};
+use fuck_ads_filter::{Engine, Request, ResourceType};
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {

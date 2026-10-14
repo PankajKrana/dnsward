@@ -7,7 +7,7 @@ YouTube serves ads from the same domains and servers as videos
 Blocking ad *servers* therefore can't work: DNS filtering alone will not
 remove YouTube ads.
 
-## What AdBlock does
+## What FuckAds does
 
 All YouTube handling is **rules, not code changes**, kept in a separate
 ruleset ([`filters/youtube.txt`](../filters/youtube.txt)) and in the
@@ -28,18 +28,18 @@ community-maintained uBlock filters list:
 3. **Cosmetic rules** hide ad containers (`ytd-ad-slot-renderer`, masthead
    ads, promoted videos).
 
-AdBlock never touches DRM, decrypts anything, or bypasses authentication or
+FuckAds never touches DRM, decrypts anything, or bypasses authentication or
 access controls. It removes advertising data from pages the user's own
 browser has already received.
 
 ## When YouTube changes
 
 YouTube changes frequently, and blocking can break for a while. Fixes ship
-as rule updates, without rebuilding AdBlock:
+as rule updates, without rebuilding FuckAds:
 
 * The uBlock filters list (enabled by default) is typically updated within
-  hours to days. AdBlock checks it every 12 hours, or immediately with
-  `sudo adblock update`.
+  hours to days. FuckAds checks it every 12 hours, or immediately with
+  `sudo fuck-ads update`.
 * To update the YouTube compatibility rules independently, host a copy of
   `filters/youtube.txt` and point the list at it:
 

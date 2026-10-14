@@ -1,6 +1,6 @@
-! Title: AdBlock YouTube compatibility rules
+! Title: FuckAds YouTube compatibility rules
 ! Description: YouTube-specific rules, kept apart from the generic lists so
-!   they can change without rebuilding AdBlock. YouTube changes often; to
+!   they can change without rebuilding FuckAds. YouTube changes often; to
 !   receive fixes quickly, point the `youtube` list's `url` at a maintained
 !   copy of this file (see docs/youtube.md).
 ! Expires: 1 day

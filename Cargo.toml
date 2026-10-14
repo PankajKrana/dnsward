@@ -1,32 +1,32 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/adblock-filter",
-    "crates/adblock-config",
-    "crates/adblock-stats",
-    "crates/adblock-dns",
-    "crates/adblock-proxy",
-    "crates/adblock-core",
-    "crates/adblock-platform",
-    "crates/adblock-cli",
+    "crates/fuck-ads-filter",
+    "crates/fuck-ads-config",
+    "crates/fuck-ads-stats",
+    "crates/fuck-ads-dns",
+    "crates/fuck-ads-proxy",
+    "crates/fuck-ads-core",
+    "crates/fuck-ads-platform",
+    "crates/fuck-ads-cli",
 ]
 
 [workspace.package]
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT"
 repository = "https://github.com/PankajKrana/fuck-ads"
 
 [workspace.dependencies]
-adblock-filter = { path = "crates/adblock-filter" }
-adblock-config = { path = "crates/adblock-config" }
-adblock-stats = { path = "crates/adblock-stats" }
-adblock-dns = { path = "crates/adblock-dns" }
-adblock-proxy = { path = "crates/adblock-proxy" }
-adblock-core = { path = "crates/adblock-core" }
-adblock-platform = { path = "crates/adblock-platform" }
-adblock-cli = { path = "crates/adblock-cli" }
+fuck-ads-filter = { path = "crates/fuck-ads-filter" }
+fuck-ads-config = { path = "crates/fuck-ads-config" }
+fuck-ads-stats = { path = "crates/fuck-ads-stats" }
+fuck-ads-dns = { path = "crates/fuck-ads-dns" }
+fuck-ads-proxy = { path = "crates/fuck-ads-proxy" }
+fuck-ads-core = { path = "crates/fuck-ads-core" }
+fuck-ads-platform = { path = "crates/fuck-ads-platform" }
+fuck-ads-cli = { path = "crates/fuck-ads-cli" }
 
 anyhow = "1"
 clap = { version = "4.6", features = ["derive", "env"] }
@@ -48,7 +48,7 @@ criterion = { version = "0.8", default-features = false }
 # Root package hosts the cross-crate integration tests in tests/ and the
 # benchmarks in benches/.
 [package]
-name = "adblock-tests"
+name = "fuck-ads-tests"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -59,20 +59,20 @@ autobins = false
 path = "tests/support/lib.rs"
 
 [dependencies]
-adblock-filter.workspace = true
-adblock-config.workspace = true
-adblock-dns.workspace = true
-adblock-core.workspace = true
+fuck-ads-filter.workspace = true
+fuck-ads-config.workspace = true
+fuck-ads-dns.workspace = true
+fuck-ads-core.workspace = true
 hickory-proto.workspace = true
 tokio.workspace = true
 tempfile.workspace = true
 
 [dev-dependencies]
-adblock-stats.workspace = true
+fuck-ads-stats.workspace = true
 sha2.workspace = true
 clap.workspace = true
-adblock-cli.workspace = true
-adblock-platform.workspace = true
+fuck-ads-cli.workspace = true
+fuck-ads-platform.workspace = true
 serde_json.workspace = true
 criterion.workspace = true
 

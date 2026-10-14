@@ -24,26 +24,26 @@ loopback ports, with a mock upstream DNS server and a mock list fetcher
 ## Running a development daemon (no root)
 
 ```sh
-mkdir -p ~/.config/adblock
-cat > ~/.config/adblock/config.toml <<'TOML'
+mkdir -p ~/.config/fuck-ads
+cat > ~/.config/fuck-ads/config.toml <<'TOML'
 [dns]
 listen = ["127.0.0.1:5354"]
 [paths]
 bundled_filters = "/path/to/checkout/filters"
 TOML
-cargo run -p adblock-cli -- --user daemon
+cargo run -p fuck-ads-cli -- --user daemon
 ```
 
 In another terminal:
 
 ```sh
 dig @127.0.0.1 -p 5354 doubleclick.net     # → 0.0.0.0
-cargo run -p adblock-cli -- status          # finds the per-user daemon automatically
-cargo run -p adblock-cli -- check https://www.youtube.com/api/stats/ads
+cargo run -p fuck-ads-cli -- status          # finds the per-user daemon automatically
+cargo run -p fuck-ads-cli -- check https://www.youtube.com/api/stats/ads
 ```
 
-The per-user daemon keeps its data in `~/.local/share/adblock` (Linux) or
-`~/Library/Application Support/AdBlock` (macOS). On macOS, Unix socket paths
+The per-user daemon keeps its data in `~/.local/share/fuck-ads` (Linux) or
+`~/Library/Application Support/FuckAds` (macOS). On macOS, Unix socket paths
 are limited to 103 bytes; set `[paths] socket` if your home path is long.
 
 ## Benchmarks
@@ -51,7 +51,7 @@ are limited to 103 bytes; set `[paths] socket` if your home path is long.
 ```sh
 cargo bench --bench filter_lookup
 cargo bench --bench dns_processing
-ADBLOCK_BENCH_LIST=~/.local/share/adblock/lists/easylist.txt cargo bench --bench filter_lookup
+FUCK_ADS_BENCH_LIST=~/.local/share/fuck-ads/lists/easylist.txt cargo bench --bench filter_lookup
 ```
 
 Reference results (Apple M-series, release build):
@@ -82,29 +82,29 @@ cargo +nightly fuzz run engine
 ./browser/build.sh     # → browser/dist/{chromium,firefox}
 ```
 
-Load `browser/dist/chromium` unpacked, then run `adblock browser install` so
+Load `browser/dist/chromium` unpacked, then run `fuck-ads browser install` so
 the browser can reach the native host. In development, the host is created
-as a symlink next to `target/debug/adblock`.
+as a symlink next to `target/debug/fuck-ads`.
 
 ## Releasing
 
 Push a `vX.Y.Z` tag. `.github/workflows/release.yml` tests, builds the four
 targets, and attaches tarballs (`packaging/make-dist.sh`), `.deb` and `.rpm`
 packages, checksums, and the installers to a GitHub release. Then update the
-`sha256` in `packaging/homebrew/adblock.rb` and `packaging/arch/PKGBUILD`.
+`sha256` in `packaging/homebrew/fuck-ads.rb` and `packaging/arch/PKGBUILD`.
 
-The repository is `PankajKrana/fuck-ads`: the installers' `ADBLOCK_REPO` default,
+The repository is `PankajKrana/fuck-ads`: the installers' `FUCK_ADS_REPO` default,
 the workspace `repository`, the packaging files and the README install commands
 all point at it. Before the first release, publish a GitHub release (the
 installers download its archives) and fill in the `sha256` values in
-`packaging/homebrew/adblock.rb` and `packaging/arch/PKGBUILD`. The Homebrew tap
+`packaging/homebrew/fuck-ads.rb` and `packaging/arch/PKGBUILD`. The Homebrew tap
 `PankajKrana/homebrew-tap` named in the formula does not exist yet.
 
 ## Code layout
 
 See [architecture.md](architecture.md). Rules of thumb:
 
-* Keep `adblock-filter`, `adblock-dns`, `adblock-core` platform-independent.
+* Keep `fuck-ads-filter`, `fuck-ads-dns`, `fuck-ads-core` platform-independent.
 * No blocking work on async request paths: rule compilation and file I/O go
   through `spawn_blocking`.
 * Never log URLs or allowed hostnames.

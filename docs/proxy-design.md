@@ -8,11 +8,11 @@ project (see "Existing decision" below).
 
 Brave blocks ads inside the browser: its network handler sees every request
 URL *before* TLS and applies the rules per URL, resource type, and first or
-third party. Cosmetic filters and scriptlets then run inside the page. AdBlock
+third party. Cosmetic filters and scriptlets then run inside the page. FuckAds
 reproduces that for browsers with the extension (`declarativeNetRequest`,
 `$removeparam`, `$redirect`, cosmetic filters, scriptlets, debouncing).
 
-For everything else on the machine, AdBlock only sees **hostnames** through
+For everything else on the machine, FuckAds only sees **hostnames** through
 DNS. The question is how much more it can do for non-browser apps, and at what
 cost.
 
@@ -76,8 +76,8 @@ a concrete, named list of apps where measurement shows a benefit.
 
 ## Phase 1: DNS bypass protection (option B)
 
-**Status: implemented** as `adblock enforce-dns on | off | status | show`
-(`crates/adblock-platform/src/firewall.rs`). Two decisions changed from the
+**Status: implemented** as `fuck-ads enforce-dns on | off | status | show`
+(`crates/fuck-ads-platform/src/firewall.rs`). Two decisions changed from the
 first draft of this section:
 
 * **Reject, don't redirect.** Redirecting traffic that the machine itself
@@ -86,10 +86,10 @@ first draft of this section:
   destinations cannot loop, and an app whose hardcoded resolver is refused
   simply falls back to the system resolver.
 * **Public destinations only.** Loopback, private, link-local and CGNAT ranges
-  are never touched, so the system resolver (which talks to AdBlock on
+  are never touched, so the system resolver (which talks to FuckAds on
   loopback), router DNS and VPN split-DNS keep working.
 
-What it does, for every account except the AdBlock service account (whose own
+What it does, for every account except the FuckAds service account (whose own
 upstream queries must pass):
 
 * refuse TCP/UDP port 53 and 853 to public addresses;
@@ -100,7 +100,7 @@ Safety, mirroring the DNS-settings changes:
 
 * It is a **separate, explicit command**, not part of `enable`, because it
   affects traffic beyond DNS.
-* It refuses to run unless system DNS is already routed through AdBlock;
+* It refuses to run unless system DNS is already routed through FuckAds;
   otherwise rejecting resolvers would break name resolution.
 * The generated rules are validated first (`pfctl -n`, `nft -c`), the intent
   is persisted before loading, and afterwards the system resolver is checked;
@@ -108,10 +108,10 @@ Safety, mirroring the DNS-settings changes:
 * `stop`, `disable` and `uninstall` remove the rules *before* restoring the
   original DNS settings, so those resolvers are never blocked by our own rules.
   `start` re-applies them if the user had them on.
-* macOS: rules live in the `com.apple/250.AdBlock` pf anchor (the stock
+* macOS: rules live in the `com.apple/250.FuckAds` pf anchor (the stock
   `/etc/pf.conf` already evaluates `com.apple/*`), enabled with the
   reference-counted `pfctl -E` so other tools that use pf are unaffected; the
-  main ruleset is never edited. Linux: a dedicated `inet adblock_enforce`
+  main ruleset is never edited. Linux: a dedicated `inet fuck_ads_enforce`
   table; nothing else is touched.
 
 Known limits: the rules are **lost at reboot** (the safe direction; `enforce-dns
@@ -124,15 +124,15 @@ below); it has not yet been exercised end-to-end on a live system.
 ## Phase 2: explicit forward proxy (option C)
 
 **Status: the proxy is implemented and off by default** (`[proxy] enabled =
-true`, crate `adblock-proxy`, run by the daemon), and `adblock proxy
+true`, crate `fuck-ads-proxy`, run by the daemon), and `fuck-ads proxy
 on | off | status | show` sets it as the macOS system proxy. **Not yet
 done:** per-app attribution, and automatic system configuration on Linux
 (which has no system-wide proxy setting a service can change safely).
 
 ```text
-app ──CONNECT host:443──► adblock-proxy (127.0.0.1:8118)
+app ──CONNECT host:443──► fuck-ads-proxy (127.0.0.1:8118)
                            ├─ LiveFilter::check_host  ──blocked──► 403 + close
-                           ├─ resolve (system resolver = AdBlock DNS when enabled)
+                           ├─ resolve (system resolver = FuckAds DNS when enabled)
                            ├─ refuse loopback/private/link-local/special targets
                            └─ allowed: TCP tunnel, bytes untouched
 app ──GET http://host/path──► same, plus URL rules (Referer as the page);
@@ -152,14 +152,14 @@ What is built:
 * Target policy: connections to loopback, private, link-local, CGNAT,
   multicast, documentation and other special-use addresses (including
   IPv4-mapped and NAT64 forms) are refused, so the proxy cannot be used to
-  reach local services such as AdBlock's own control socket.
+  reach local services such as FuckAds's own control socket.
 * Same decisions as everything else: the daemon's `LiveFilter`, so user
-  allow/block entries, "required by AdBlock" hosts and pause apply. Blocked
+  allow/block entries, "required by FuckAds" hosts and pause apply. Blocked
   requests are counted in the normal statistics; allowed ones and URLs are
   never logged or stored.
 * A concurrency cap (excess connections are closed), a head timeout, a
   connect timeout and a 5-minute tunnel idle timeout.
-* `adblock status` shows the listening address when the proxy is on.
+* `fuck-ads status` shows the listening address when the proxy is on.
 
 Deliberate limits:
 
@@ -170,7 +170,7 @@ Deliberate limits:
 * **No per-app attribution yet.** The proxy does not look up which process
   owns the client socket; that is the remaining reason to prefer this over
   DNS alone and is not built.
-* **System configuration is macOS-only and explicit.** `sudo adblock proxy
+* **System configuration is macOS-only and explicit.** `sudo fuck-ads proxy
   on` sets the PAC URL (`http://127.0.0.1:8118/proxy.pac`) on every network
   service with `networksetup`, after saving each service's previous
   automatic-proxy setting in the root-only system state. It refuses to run
@@ -235,7 +235,7 @@ Deliberate limits:
 * **Certificate pinning and failures.** An app that pins will reject the leaf
   and abort the handshake. Treat a client-side handshake failure for a host as
   "this app pins": add the host to an automatic bypass for a period, tunnel it
-  untouched from then on, and surface it in `adblock doctor`. Never retry in a
+  untouched from then on, and surface it in `fuck-ads doctor`. Never retry in a
   way that downgrades security.
 * **QUIC / HTTP/3.** UDP 443 bypasses a TCP proxy. Blocking it (so clients
   fall back to TCP) is part of the scoped firewall rules in Phase 1.
@@ -307,6 +307,6 @@ which apps are affected and makes pinning failures look like random outages.
   any target at all.
 * Is a macOS system extension (option E) acceptable as a distribution
   model, given the signing and entitlement requirements?
-* Should Phase 1's firewall rules be part of `adblock enable`, or a separate
+* Should Phase 1's firewall rules be part of `fuck-ads enable`, or a separate
   explicit command? The current preference is a separate command, because
   they affect traffic beyond DNS.

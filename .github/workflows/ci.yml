@@ -46,22 +46,22 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release --locked -p adblock-cli
+      - run: cargo build --release --locked -p fuck-ads-cli
       - name: Archive
-        run: packaging/make-dist.sh x86_64-unknown-linux-gnu target/release/adblock dist
+        run: packaging/make-dist.sh x86_64-unknown-linux-gnu target/release/fuck-ads dist
       - name: Debian package
-        run: packaging/deb/build-deb.sh target/release/adblock 0.0.0-ci amd64 dist
+        run: packaging/deb/build-deb.sh target/release/fuck-ads 0.0.0-ci amd64 dist
       - name: RPM package
         run: |
           sudo apt-get update && sudo apt-get install -y rpm
-          rpmbuild -bb packaging/rpm/adblock.spec --define "_version 0.0.0" \
-            --define "_srcroot $PWD" --define "_bin $PWD/target/release/adblock" \
+          rpmbuild -bb packaging/rpm/fuck-ads.spec --define "_version 0.0.0" \
+            --define "_srcroot $PWD" --define "_bin $PWD/target/release/fuck-ads" \
             --define "_rpmdir $PWD/dist"
-          rpm -qpl dist/*/adblock-*.rpm
-          rpm -qpl dist/*/adblock-*.rpm | grep -q '/usr/share/adblock/chromium/manifest.json'
-          rpm -qpl dist/*/adblock-*.rpm | grep -q '/usr/share/adblock/firefox/manifest.json'
-          dpkg-deb -c dist/adblock_0.0.0-ci_amd64.deb | grep -q 'usr/share/adblock/chromium/manifest.json'
-          rpm -qp --scripts dist/*/adblock-*.rpm | grep -q systemctl
+          rpm -qpl dist/*/fuck-ads-*.rpm
+          rpm -qpl dist/*/fuck-ads-*.rpm | grep -q '/usr/share/fuck-ads/chromium/manifest.json'
+          rpm -qpl dist/*/fuck-ads-*.rpm | grep -q '/usr/share/fuck-ads/firefox/manifest.json'
+          dpkg-deb -c dist/fuck_ads_0.0.0-ci_amd64.deb | grep -q 'usr/share/fuck-ads/chromium/manifest.json'
+          rpm -qp --scripts dist/*/fuck-ads-*.rpm | grep -q systemctl
 
   shellcheck:
     runs-on: ubuntu-24.04
@@ -81,36 +81,36 @@ jobs:
       - name: Verify
         run: |
           set -x
-          adblock status
-          adblock doctor || true
+          fuck-ads status
+          fuck-ads doctor || true
           # IPv4 only: `getent hosts` prefers IPv6 and would print `::` for a blocked name.
           getent ahostsv4 doubleclick.net | grep -q '0.0.0.0'
           getent ahostsv4 example.com
-          getent ahostsv4 adblock-probe.test | grep -q 127.0.0.209
-          sudo adblock allow doubleclick.net
+          getent ahostsv4 fuck-ads-probe.test | grep -q 127.0.0.209
+          sudo fuck-ads allow doubleclick.net
           sudo resolvectl flush-caches || true
           ! getent ahostsv4 doubleclick.net | grep -q '0.0.0.0'
       - name: Daemon drops root after binding its sockets
         run: |
           set -x
-          sudo systemctl stop adblock
-          sudo install -d -o adblock -g adblock /run/adblock
-          sudo sh -c "setsid $(command -v adblock) daemon >/tmp/adblock-root.log 2>&1 &"
-          for i in $(seq 1 30); do [ -S /run/adblock/control.sock ] && break; sleep 1; done
-          PID=$(pgrep -x adblock | head -1)
+          sudo systemctl stop fuck-ads
+          sudo install -d -o fuck-ads -g fuck-ads /run/fuck-ads
+          sudo sh -c "setsid $(command -v fuck-ads) daemon >/tmp/fuck-ads-root.log 2>&1 &"
+          for i in $(seq 1 30); do [ -S /run/fuck-ads/control.sock ] && break; sleep 1; done
+          PID=$(pgrep -x fuck-ads | head -1)
           test -n "$PID"
-          test "$(ps -o user= -p "$PID" | tr -d ' ')" = adblock
-          getent ahostsv4 adblock-probe.test | grep -q 127.0.0.209
+          test "$(ps -o user= -p "$PID" | tr -d ' ')" = fuck-ads
+          getent ahostsv4 fuck-ads-probe.test | grep -q 127.0.0.209
           sudo kill "$PID"
           sleep 2
-          sudo systemctl start adblock
+          sudo systemctl start fuck-ads
       - name: Disable restores DNS
         run: |
-          sudo adblock disable
-          ! getent hosts adblock-probe.test
+          sudo fuck-ads disable
+          ! getent hosts fuck-ads-probe.test
           getent hosts example.com
       - name: Uninstall
-        run: ./installers/uninstall.sh --purge && ! command -v adblock
+        run: ./installers/uninstall.sh --purge && ! command -v fuck-ads
 
   fuzz:
     runs-on: ubuntu-24.04

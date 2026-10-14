@@ -2,26 +2,26 @@
 
 ## Components
 
-AdBlock ships as **one binary**, `adblock`, which runs in three roles:
+FuckAds ships as **one binary**, `fuck-ads`, which runs in three roles:
 
 | Role | Started by | Privileges |
 |---|---|---|
-| `adblock daemon` | systemd / launchd | unprivileged service account (`adblock` / `_adblock`), only allowed to bind port 53 |
-| `adblock <command>` | the user | the user's own; `sudo` for commands that change system settings |
-| `adblock-native-host` (symlink) | the browser | the browser user's; can only forward read-only requests |
+| `fuck-ads daemon` | systemd / launchd | unprivileged service account (`fuck-ads` / `_fuck-ads`), only allowed to bind port 53 |
+| `fuck-ads <command>` | the user | the user's own; `sudo` for commands that change system settings |
+| `fuck-ads-native-host` (symlink) | the browser | the browser user's; can only forward read-only requests |
 
 ## Crates
 
 ```text
 crates/
-├── adblock-filter    Filter parsing + matching engine. No I/O, no platform code.
-├── adblock-config    Config schema/validation, platform paths, atomic file writes.
-├── adblock-stats     Privacy-preserving daily counters.
-├── adblock-dns       UDP/TCP listener, filtering resolver, DoH/plain upstreams, cache.
-├── adblock-core      Daemon: live rules, updater, control API (Unix socket).
-├── adblock-platform  OS adapters: systemd + resolved/NM/resolv.conf, launchd + networksetup,
+├── fuck-ads-filter    Filter parsing + matching engine. No I/O, no platform code.
+├── fuck-ads-config    Config schema/validation, platform paths, atomic file writes.
+├── fuck-ads-stats     Privacy-preserving daily counters.
+├── fuck-ads-dns       UDP/TCP listener, filtering resolver, DoH/plain upstreams, cache.
+├── fuck-ads-core      Daemon: live rules, updater, control API (Unix socket).
+├── fuck-ads-platform  OS adapters: systemd + resolved/NM/resolv.conf, launchd + networksetup,
 │                     browser native-host registration.
-└── adblock-cli       The `adblock` binary: CLI, daemon entry, native messaging host.
+└── fuck-ads-cli       The `fuck-ads` binary: CLI, daemon entry, native messaging host.
 ```
 
 Dependency direction: `filter ← config ← stats ← dns ← core ← cli` and
@@ -29,11 +29,11 @@ Dependency direction: `filter ← config ← stats ← dns ← core ← cli` and
 privileged CLI commands touch OS configuration, so the long-running process
 needs no root rights.
 
-To add Windows later, implement `adblock_platform::Platform` (Windows
+To add Windows later, implement `fuck_ads_platform::Platform` (Windows
 Service, `netsh`/WMI DNS settings, registry-based native-host registration)
-and swap the Unix socket for a named pipe in `adblock-core::control`.
+and swap the Unix socket for a named pipe in `fuck-ads-core::control`.
 
-## Filter engine (`adblock-filter`)
+## Filter engine (`fuck-ads-filter`)
 
 * **Parser.** Handles hosts files, plain domain lists, and Adblock Plus /
   uBlock Origin / AdGuard syntax. Unsupported syntax is counted and skipped,
@@ -52,7 +52,7 @@ and swap the Unix socket for a named pipe in `adblock-core::control`.
   that can't be keyed are sent once per frame.
 * **Precedence.** `$important` block > `$important` exception > page
   (`$document`) exception > exception > block. User allow/block lists sit
-  above all filter lists. Hosts AdBlock needs to function (DoH upstreams,
+  above all filter lists. Hosts FuckAds needs to function (DoH upstreams,
   list servers) are never blocked.
 * **Query-parameter stripping.** `$removeparam=name` filters (literal names
   only; regex and exception forms are skipped) never block and never reach
@@ -70,7 +70,7 @@ and swap the Unix socket for a named pipe in `adblock-core::control`.
   The analytics stubs are original code: they define the globals pages call
   (`ga()`, `dataLayer`, `googletag`, `apstag`), run queued callbacks and
   report nothing. They are tested in `browser/tests/resources.test.js`.
-  Only names in `adblock_filter::resources` are accepted; unknown names,
+  Only names in `fuck_ads_filter::resources` are accepted; unknown names,
   `$redirect-rule` and exception forms are skipped. Redirect filters never
   apply to top-level documents and are kept out of the DNS layer (the page
   needs the stub, not a dead host). The DNR export emits a `redirect` rule
@@ -82,7 +82,7 @@ and swap the Unix socket for a named pipe in `adblock-core::control`.
   thousands of hostnames take only a few dozen of the 30,000 available
   dynamic rules. Rules can also be exported as Safari content-blocker JSON.
 
-## DNS resolver (`adblock-dns`)
+## DNS resolver (`fuck-ads-dns`)
 
 ```text
 query → parse → local answers (localhost, probe, .local/.lan, private PTR)
@@ -96,11 +96,11 @@ query → parse → local answers (localhost, probe, .local/.lan, private PTR)
 * Upstream responses are accepted only if the ID and question match.
   Plain-DNS queries use random IDs and a fresh random source port per query.
 * DoH hostnames are resolved through dedicated bootstrap servers. Using the
-  system resolver would loop back into AdBlock itself.
+  system resolver would loop back into FuckAds itself.
 * Client EDNS options are never forwarded; each upstream query gets a fresh
   EDNS record.
 
-## Daemon (`adblock-core`)
+## Daemon (`fuck-ads-core`)
 
 * `LiveFilter` holds `Arc<Engine>` behind a `RwLock`. Updates build a new
   engine on a blocking thread and swap the pointer, so queries never wait on
@@ -117,7 +117,7 @@ query → parse → local answers (localhost, probe, .local/.lan, private PTR)
 
 ```text
 content.js (isolated world): collects class/id tokens ──► background.js
-background.js ◄──native messaging──► adblock-native-host ◄──Unix socket──► daemon
+background.js ◄──native messaging──► fuck-ads-native-host ◄──Unix socket──► daemon
   ├─ declarativeNetRequest dynamic rules (network blocking, evaluated by the browser)
   ├─ scripting.insertCSS(origin: USER) (cosmetic filtering)
   └─ userScripts / executeScript(world: MAIN) (scriptlets from scriptlets.js)
@@ -130,10 +130,10 @@ DNR rules persist across browser restarts.
 
 | Path (Linux / macOS) | Owner | Content |
 |---|---|---|
-| `/etc/adblock/config.toml` / `…/AdBlock/config.toml` | root | configuration |
-| `/var/lib/adblock/system-state.json` / `…/AdBlock/system-state.json` | root, 0600 | backup of the previous DNS settings |
+| `/etc/fuck-ads/config.toml` / `…/FuckAds/config.toml` | root | configuration |
+| `/var/lib/fuck-ads/system-state.json` / `…/FuckAds/system-state.json` | root, 0600 | backup of the previous DNS settings |
 | `…/data/lists/*.txt[.prev]` | service | downloaded lists |
 | `…/data/update-state.json` | service | ETags, checksums, update timestamps |
-| `…/data/user-rules.json` | service | `adblock allow/block` entries |
+| `…/data/user-rules.json` | service | `fuck-ads allow/block` entries |
 | `…/data/stats.json` | service | daily counters |
-| `/run/adblock/control.sock` / `…/AdBlock/data/control.sock` | service | control API |
+| `/run/fuck-ads/control.sock` / `…/FuckAds/data/control.sock` | service | control API |

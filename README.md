@@ -1,11 +1,11 @@
-# AdBlock
+# FuckAds
 
 System-wide ad and tracker blocking for **Linux** and **macOS**, with browser
 extensions for in-page filtering. Written in Rust.
 
 ```text
-$ adblock status
-AdBlock
+$ fuck-ads status
+FuckAds
 ──────────────────────────────
 Status:          ● Active
 Platform:        macOS
@@ -18,7 +18,7 @@ Trackers:        4,291
 Last update:     4 minutes ago
 ```
 
-AdBlock works in two layers:
+FuckAds works in two layers:
 
 1. **System-wide DNS filtering.** A local resolver on `127.0.0.1:53` answers
    requests for ad and tracker domains with `0.0.0.0` and forwards everything
@@ -26,7 +26,7 @@ AdBlock works in two layers:
 2. **Browser filtering.** Extensions for Chromium-based browsers and Firefox
    block ad requests on otherwise legitimate domains, hide ad elements, and
    apply YouTube compatibility rules. The browser enforces these rules itself;
-   AdBlock does not intercept HTTPS.
+   FuckAds does not intercept HTTPS.
 
 Both layers use the same widely used open filter lists: EasyList,
 EasyPrivacy, uBlock filters, and Peter Lowe's list.
@@ -42,7 +42,7 @@ EasyPrivacy, uBlock filters, and Peter Lowe's list.
 | Platform | Architectures | Service | DNS integration |
 |---|---|---|---|
 | Linux with systemd | x86_64, arm64 | systemd unit, sandboxed, unprivileged user | systemd-resolved, NetworkManager, or `/etc/resolv.conf` |
-| macOS 11+ | Intel, Apple Silicon | LaunchDaemon, unprivileged `_adblock` user | every network service (`networksetup`) |
+| macOS 11+ | Intel, Apple Silicon | LaunchDaemon, unprivileged `_fuck-ads` user | every network service (`networksetup`) |
 
 | Browser | Support |
 |---|---|
@@ -71,36 +71,36 @@ git clone https://github.com/PankajKrana/fuck-ads && cd fuck-ads
 
 **Homebrew:**
 ```sh
-brew install PankajKrana/tap/adblock
-sudo adblock enable
+brew install PankajKrana/tap/fuck-ads
+sudo fuck-ads enable
 ```
 
 **Packages:** `.deb` and `.rpm` files are attached to each release. An Arch
 `PKGBUILD` lives in [`packaging/arch`](packaging/arch). After installing a
-package, run `sudo adblock enable`.
+package, run `sudo fuck-ads enable`.
 
 The installers detect your OS and CPU and verify the download's SHA-256 (or
 build from source). They create an unprivileged service account, install the
 service, write a default configuration, enable protection, download the
-filter lists, and finish with `adblock doctor`.
+filter lists, and finish with `fuck-ads doctor`.
 
 ## Uninstall
 
-**Normal way** (any install method; the `adblock` command must still work):
+**Normal way** (any install method; the `fuck-ads` command must still work):
 
 ```sh
-sudo adblock uninstall          # asks first; add --yes to skip the question
-sudo adblock uninstall --purge  # also delete the configuration file
+sudo fuck-ads uninstall          # asks first; add --yes to skip the question
+sudo fuck-ads uninstall --purge  # also delete the configuration file
 ```
 
 This restores your previous DNS settings first (and turns off the optional
 `enforce-dns` firewall rules and the system proxy if you enabled them), then
-stops and removes the service and its `_adblock` / `adblock` account,
+stops and removes the service and its `_fuck-ads` / `fuck-ads` account,
 unregisters the browser native-messaging host, and deletes the downloaded
-filter lists, statistics, logs and the `adblock` binary. Your configuration
+filter lists, statistics, logs and the `fuck-ads` binary. Your configuration
 file is kept unless you pass `--purge`.
 
-**If the `adblock` command is broken or missing**, run the uninstall script. It
+**If the `fuck-ads` command is broken or missing**, run the uninstall script. It
 falls back to removing everything by hand:
 
 ```sh
@@ -112,17 +112,17 @@ curl -fsSL https://raw.githubusercontent.com/PankajKrana/fuck-ads/main/installer
 service and DNS settings live outside Homebrew's directories:
 
 ```sh
-sudo adblock uninstall --yes
-brew uninstall adblock
+sudo fuck-ads uninstall --yes
+brew uninstall fuck-ads
 ```
 
 **`.deb` / `.rpm` packages:** removing the package restores DNS and stops the
 service for you.
 
 ```sh
-sudo apt remove adblock     # or: sudo apt purge adblock   (also deletes config and data)
-sudo dnf remove adblock
-sudo pacman -R adblock
+sudo apt remove fuck-ads     # or: sudo apt purge fuck-ads   (also deletes config and data)
+sudo dnf remove fuck-ads
+sudo pacman -R fuck-ads
 ```
 
 **Browser extension:** remove it yourself in the browser's extensions page
@@ -132,7 +132,7 @@ be deleted).
 **Check it worked:**
 
 ```sh
-which adblock                          # should print nothing
+which fuck-ads                          # should print nothing
 networksetup -getdnsservers Wi-Fi      # macOS: "There aren't any DNS Servers set" (or your own servers)
 resolvectl status | head               # Linux: no 127.0.0.1 as the DNS server
 ```
@@ -141,17 +141,17 @@ If DNS is still pointing at `127.0.0.1` after an uninstall, set it back by hand
 (macOS: `sudo networksetup -setdnsservers Wi-Fi Empty`, repeated for each network
 service; Linux: re-enable your normal resolver or edit `/etc/resolv.conf`).
 
-To switch protection off **without** uninstalling, use `sudo adblock disable`
-(and `sudo adblock enable` to turn it back on), or `sudo adblock pause` to stop
+To switch protection off **without** uninstalling, use `sudo fuck-ads disable`
+(and `sudo fuck-ads enable` to turn it back on), or `sudo fuck-ads pause` to stop
 filtering temporarily while leaving everything installed.
 
 ## Quick start
 
 ```sh
-sudo adblock enable      # turn protection on (survives reboots)
-adblock status           # what is running
-adblock doctor           # check everything, with fixes for any problem
-sudo adblock disable     # turn it off and restore your previous DNS settings
+sudo fuck-ads enable      # turn protection on (survives reboots)
+fuck-ads status           # what is running
+fuck-ads doctor           # check everything, with fixes for any problem
+sudo fuck-ads disable     # turn it off and restore your previous DNS settings
 ```
 
 For in-page and YouTube ad blocking, also install the
@@ -161,24 +161,24 @@ For in-page and YouTube ad blocking, also install the
 
 | Command | Purpose |
 |---|---|
-| `adblock status` | Protection status (exit code 3 if the service is not running) |
-| `sudo adblock enable` / `disable` | Turn protection on/off (service at boot + system DNS) |
-| `adblock proxy status` / `show`, `sudo adblock proxy on` / `off` | Optional local filtering proxy: use it as the macOS system proxy (needs `[proxy] enabled = true`); see [docs/proxy-design.md](docs/proxy-design.md) |
-| `sudo adblock enforce-dns on` / `off` / `status`, `adblock enforce-dns show` | Optional: refuse public resolvers for apps that skip system DNS (see [docs/proxy-design.md](docs/proxy-design.md)) |
-| `sudo adblock start` / `stop` / `restart` | Control the service. `stop` restores system DNS while stopped |
-| `sudo adblock pause` / `resume` | Temporarily stop filtering without touching system settings |
-| `sudo adblock update [--force]` | Download filter-list updates now |
-| `adblock rules` | Filter lists, rule counts, update status |
-| `adblock check <domain or URL>` | Whether something is blocked, and by which rule |
-| `adblock stats [--days N]` / `sudo adblock stats reset` | Local statistics |
-| `adblock logs [-f] [-n N]` | Service logs (journald on Linux, log file on macOS) |
-| `adblock config [show\|path\|validate\|default]` | Configuration |
-| `adblock doctor` | Diagnose problems |
-| `sudo adblock allow <domain>` / `block <domain>` | Never/always block a domain and its subdomains |
-| `sudo adblock remove-allow <domain>` / `remove-block <domain>` | Undo the above |
-| `adblock allowlist` / `blocklist` | List your allow/block entries |
-| `adblock browser install\|uninstall\|status\|export-safari` | Browser integration |
-| `sudo adblock uninstall [--purge]` | Remove AdBlock and restore DNS |
+| `fuck-ads status` | Protection status (exit code 3 if the service is not running) |
+| `sudo fuck-ads enable` / `disable` | Turn protection on/off (service at boot + system DNS) |
+| `fuck-ads proxy status` / `show`, `sudo fuck-ads proxy on` / `off` | Optional local filtering proxy: use it as the macOS system proxy (needs `[proxy] enabled = true`); see [docs/proxy-design.md](docs/proxy-design.md) |
+| `sudo fuck-ads enforce-dns on` / `off` / `status`, `fuck-ads enforce-dns show` | Optional: refuse public resolvers for apps that skip system DNS (see [docs/proxy-design.md](docs/proxy-design.md)) |
+| `sudo fuck-ads start` / `stop` / `restart` | Control the service. `stop` restores system DNS while stopped |
+| `sudo fuck-ads pause` / `resume` | Temporarily stop filtering without touching system settings |
+| `sudo fuck-ads update [--force]` | Download filter-list updates now |
+| `fuck-ads rules` | Filter lists, rule counts, update status |
+| `fuck-ads check <domain or URL>` | Whether something is blocked, and by which rule |
+| `fuck-ads stats [--days N]` / `sudo fuck-ads stats reset` | Local statistics |
+| `fuck-ads logs [-f] [-n N]` | Service logs (journald on Linux, log file on macOS) |
+| `fuck-ads config [show\|path\|validate\|default]` | Configuration |
+| `fuck-ads doctor` | Diagnose problems |
+| `sudo fuck-ads allow <domain>` / `block <domain>` | Never/always block a domain and its subdomains |
+| `sudo fuck-ads remove-allow <domain>` / `remove-block <domain>` | Undo the above |
+| `fuck-ads allowlist` / `blocklist` | List your allow/block entries |
+| `fuck-ads browser install\|uninstall\|status\|export-safari` | Browser integration |
+| `sudo fuck-ads uninstall [--purge]` | Remove FuckAds and restore DNS |
 
 Global flags: `--json` for machine-readable output, `--no-color`,
 `--config FILE`, and `--user` (per-user mode, see
@@ -192,10 +192,10 @@ commands do not.
 
 | Platform | File |
 |---|---|
-| Linux | `/etc/adblock/config.toml` |
-| macOS | `/Library/Application Support/AdBlock/config.toml` |
+| Linux | `/etc/fuck-ads/config.toml` |
+| macOS | `/Library/Application Support/FuckAds/config.toml` |
 
-`adblock config default` prints the fully commented default file. Common
+`fuck-ads config default` prints the fully commented default file. Common
 settings:
 
 ```toml
@@ -214,7 +214,7 @@ blocking_mode = "null"         # null (0.0.0.0) | nxdomain | refused
 auto_update = true
 update_interval_hours = 12
 
-[[filters.lists]]              # add any list in adblock, hosts or domain format
+[[filters.lists]]              # add any list in fuck-ads, hosts or domain format
 name = "my-list"
 url = "https://example.org/list.txt"
 category = "trackers"
@@ -229,7 +229,7 @@ rules = ["||annoying.example^", "example.org##.promo"]
 ```
 
 Unknown keys are rejected so typos are not silently ignored. After editing,
-run `adblock config validate` and then `sudo adblock restart`.
+run `fuck-ads config validate` and then `sudo fuck-ads restart`.
 
 Advanced users can also change the blocking response, cache size and TTLs,
 upstream timeouts, bootstrap resolvers for DoH hostnames, the DNR rule budget,
@@ -240,14 +240,14 @@ default file.
 
 The extension adds in-page blocking (cosmetic filters, YouTube, URL rules). It
 is **not on any browser store yet**, so you load it by hand. It downloads
-nothing on its own: it gets its rules from the local AdBlock service through
-native messaging, so the service must be running (`sudo adblock enable`).
+nothing on its own: it gets its rules from the local FuckAds service through
+native messaging, so the service must be running (`sudo fuck-ads enable`).
 
 ### 1. Register your browser (once)
 
 ```sh
-adblock browser install     # per user, no sudo. Chrome, Chromium, Brave, Edge, Vivaldi, Firefox
-adblock browser status      # which browsers are registered
+fuck-ads browser install     # per user, no sudo. Chrome, Chromium, Brave, Edge, Vivaldi, Firefox
+fuck-ads browser status      # which browsers are registered
 ```
 
 The installers register Chrome, Chromium, Edge and Firefox system-wide, but
@@ -256,7 +256,7 @@ The installers register Chrome, Chromium, Edge and Firefox system-wide, but
 ### 2. Get the extension folder
 
 The simplest way, for any install method: download
-`adblock-chromium.zip` (Chrome, Brave, Edge, Vivaldi) or `adblock-firefox.zip`
+`fuck-ads-chromium.zip` (Chrome, Brave, Edge, Vivaldi) or `fuck-ads-firefox.zip`
 (Firefox) from the [latest release](https://github.com/PankajKrana/fuck-ads/releases/latest)
 and unzip it somewhere permanent (browsers load an unpacked extension from that
 folder, so don't delete it).
@@ -265,9 +265,9 @@ Or use the copy your install already put on disk:
 
 | Installed with | Folders |
 |---|---|
-| `install.sh` / `install-macos.sh` | `/usr/local/share/adblock/browser/chromium` and `…/firefox` |
-| Homebrew | `$(brew --prefix)/share/adblock/chromium` and `…/firefox` |
-| `.deb`, `.rpm`, Arch | `/usr/share/adblock/chromium` and `…/firefox` |
+| `install.sh` / `install-macos.sh` | `/usr/local/share/fuck-ads/browser/chromium` and `…/firefox` |
+| Homebrew | `$(brew --prefix)/share/fuck-ads/chromium` and `…/firefox` |
+| `.deb`, `.rpm`, Arch | `/usr/share/fuck-ads/chromium` and `…/firefox` |
 | Source checkout | run `sh browser/build.sh`, then `browser/dist/chromium` and `browser/dist/firefox` |
 
 ### 3. Load it
@@ -275,12 +275,12 @@ Or use the copy your install already put on disk:
 | Browser | Steps |
 |---|---|
 | **Chrome** | Open `chrome://extensions` → turn on **Developer mode** → **Load unpacked** → choose the `chromium` folder. In the extension's *Details*, turn on **Allow User Scripts** (Chrome 138+) for reliable YouTube blocking. |
-| **Brave** | Open `brave://extensions` → **Developer mode** → **Load unpacked** → the `chromium` folder. Turn on **Allow User Scripts** if your version shows it. Remember `adblock browser install` (Brave is not in the system-wide registration). |
+| **Brave** | Open `brave://extensions` → **Developer mode** → **Load unpacked** → the `chromium` folder. Turn on **Allow User Scripts** if your version shows it. Remember `fuck-ads browser install` (Brave is not in the system-wide registration). |
 | **Edge** | Open `edge://extensions` → **Developer mode** → **Load unpacked** → the `chromium` folder. |
-| **Vivaldi** | Open `vivaldi://extensions` → **Developer mode** → **Load unpacked** → the `chromium` folder. Run `adblock browser install` first. |
+| **Vivaldi** | Open `vivaldi://extensions` → **Developer mode** → **Load unpacked** → the `chromium` folder. Run `fuck-ads browser install` first. |
 | **Firefox 128+** | Open `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on** → pick `manifest.json` in the `firefox` folder (or the zip). Then in `about:addons` give the extension access to all websites. Temporary add-ons are removed when Firefox restarts; for a permanent install you need a build signed through addons.mozilla.org. |
-| **Safari** | No loadable extension: Safari requires a signed Xcode app. Export content-blocker rules instead (`adblock browser export-safari rules.json`; network and element blocking only). See [browser/safari](browser/safari/README.md). |
-| **Opera and others** | Not registered by `adblock browser install`, so the extension cannot reach the service. |
+| **Safari** | No loadable extension: Safari requires a signed Xcode app. Export content-blocker rules instead (`fuck-ads browser export-safari rules.json`; network and element blocking only). See [browser/safari](browser/safari/README.md). |
+| **Opera and others** | Not registered by `fuck-ads browser install`, so the extension cannot reach the service. |
 
 All Chromium-based browsers use the same extension ID
 (`chlpacjmjgeglnhaedpfiffkdfakeana`, fixed by the key in the manifest), so
@@ -288,7 +288,7 @@ nothing needs configuring.
 
 ### 4. Check it works
 
-`adblock status` should show **Browser filter: Active** (it says *Not
+`fuck-ads status` should show **Browser filter: Active** (it says *Not
 connected* until a browser has talked to the service), and the extension's
 popup shows its status and can pause blocking for the current site. More
 detail: [docs/browser.md](docs/browser.md).
@@ -304,13 +304,13 @@ cannot stop them. The extension handles YouTube with:
 * cosmetic rules that hide ad slots in the page.
 
 These rules live in a separate ruleset ([`filters/youtube.txt`](filters/youtube.txt))
-and in the uBlock filters list. Both update without a new AdBlock binary.
-AdBlock does not touch DRM, authentication, or any access control. See
+and in the uBlock filters list. Both update without a new FuckAds binary.
+FuckAds does not touch DRM, authentication, or any access control. See
 [docs/youtube.md](docs/youtube.md).
 
 ## Privacy
 
-* **No telemetry.** AdBlock contacts only your configured DNS upstreams and
+* **No telemetry.** FuckAds contacts only your configured DNS upstreams and
   filter-list servers.
 * **No browsing history.** The DNS resolver never records allowed domains,
   query timestamps, or client addresses. Statistics are daily counters plus,
@@ -326,12 +326,12 @@ The full list of stored data is in [docs/privacy.md](docs/privacy.md).
 
 ## Troubleshooting
 
-Start with `adblock doctor`. It checks every layer and prints the fix for
+Start with `fuck-ads doctor`. It checks every layer and prints the fix for
 each problem. Common situations, including VPNs, browser secure-DNS settings,
 iCloud Private Relay, conflicts on port 53, and a site that is broken by
 blocking, are covered in [docs/troubleshooting.md](docs/troubleshooting.md).
 
-If anything goes wrong with DNS, `sudo adblock disable` restores your
+If anything goes wrong with DNS, `sudo fuck-ads disable` restores your
 previous settings exactly.
 
 ## Limitations
@@ -340,7 +340,7 @@ previous settings exactly.
   newly changed ad formats can get through until the filter lists catch up.
 * **Encrypted DNS in apps or browsers bypasses system DNS filtering.**
   Browsers' "secure DNS" options, apps with hard-coded DoH resolvers, and
-  iCloud Private Relay all skip the system resolver. AdBlock signals Firefox
+  iCloud Private Relay all skip the system resolver. FuckAds signals Firefox
   to disable its automatic DoH, and the extension still filters inside the
   browser.
 * **VPNs** often install their own DNS settings while connected.
@@ -359,7 +359,7 @@ previous settings exactly.
 cargo test --workspace                 # unit + integration tests
 node --test "browser/tests/*.test.js"  # extension scriptlet tests
 cargo bench                            # rule lookup and DNS benchmarks
-cargo run -p adblock-cli -- --user daemon   # run a per-user daemon
+cargo run -p fuck-ads-cli -- --user daemon   # run a per-user daemon
 ```
 
 See [docs/development.md](docs/development.md).
@@ -367,17 +367,17 @@ See [docs/development.md](docs/development.md).
 ## Architecture
 
 ```text
-             adblock (single binary)
+             fuck-ads (single binary)
    ┌──────────────┬──────────────┬──────────────────┐
    │ CLI          │ daemon       │ native-host      │
    └──────┬───────┴──────┬───────┴────────┬─────────┘
           │ control API (Unix socket, JSON)│
    ┌──────┴──────────────┴─────────────────┴────────┐
-   │ adblock-core: rules, updates, stats, control   │
+   │ fuck-ads-core: rules, updates, stats, control   │
    ├──────────────┬───────────────┬─────────────────┤
-   │ adblock-filter│ adblock-dns  │ adblock-stats   │  platform-independent
+   │ fuck-ads-filter│ fuck-ads-dns  │ fuck-ads-stats   │  platform-independent
    ├──────────────┴───────────────┴─────────────────┤
-   │ adblock-platform: systemd/resolved | launchd/networksetup │
+   │ fuck-ads-platform: systemd/resolved | launchd/networksetup │
    └────────────────────────────────────────────────┘
 ```
 

@@ -1,4 +1,4 @@
-! Title: AdBlock baseline
+! Title: FuckAds baseline
 ! Description: Small seed list so blocking works before the first filter
 !   update. The full protection comes from the downloaded lists (EasyList,
 !   EasyPrivacy, uBlock filters, Peter Lowe's list). Only long-established

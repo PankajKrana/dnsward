@@ -1,0 +1,16 @@
+[package]
+name = "fuck-ads-config"
+description = "Configuration schema, validation and platform paths for FuckAds"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+fuck-ads-filter.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+libc.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

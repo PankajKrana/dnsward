@@ -26,18 +26,18 @@ jobs:
           targets: ${{ matrix.target }}
       - run: cargo test --workspace --locked
         if: ${{ !matrix.cross }}
-      - run: cargo build --release --locked -p adblock-cli --target ${{ matrix.target }}
+      - run: cargo build --release --locked -p fuck-ads-cli --target ${{ matrix.target }}
       - name: Archive
-        run: packaging/make-dist.sh ${{ matrix.target }} target/${{ matrix.target }}/release/adblock dist
+        run: packaging/make-dist.sh ${{ matrix.target }} target/${{ matrix.target }}/release/fuck-ads dist
       - name: Debian package
         if: matrix.deb
-        run: packaging/deb/build-deb.sh target/${{ matrix.target }}/release/adblock "${GITHUB_REF_NAME#v}" ${{ matrix.deb }} dist
+        run: packaging/deb/build-deb.sh target/${{ matrix.target }}/release/fuck-ads "${GITHUB_REF_NAME#v}" ${{ matrix.deb }} dist
       - name: RPM package
         if: matrix.deb
         run: |
           sudo apt-get update && sudo apt-get install -y rpm
-          rpmbuild -bb packaging/rpm/adblock.spec --define "_version ${GITHUB_REF_NAME#v}" \
-            --define "_srcroot $PWD" --define "_bin $PWD/target/${{ matrix.target }}/release/adblock" \
+          rpmbuild -bb packaging/rpm/fuck-ads.spec --define "_version ${GITHUB_REF_NAME#v}" \
+            --define "_srcroot $PWD" --define "_bin $PWD/target/${{ matrix.target }}/release/fuck-ads" \
             --define "_rpmdir $PWD/dist"
       - uses: actions/upload-artifact@v4
         with:
@@ -56,7 +56,7 @@ jobs:
       - name: Browser extensions
         run: |
           ./browser/build.sh
-          cp browser/dist/adblock-chromium.zip browser/dist/adblock-firefox.zip dist/
+          cp browser/dist/fuck-ads-chromium.zip browser/dist/fuck-ads-firefox.zip dist/
       - name: Checksums
         run: cd dist && find . -type f ! -name '*.sha256' -exec sha256sum {} + > SHA256SUMS
       - uses: softprops/action-gh-release@v2

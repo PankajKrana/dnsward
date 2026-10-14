@@ -1,7 +1,7 @@
-//! `adblock allow/block` behaviour through the control API.
+//! `fuck-ads allow/block` behaviour through the control API.
 
-use adblock_core::protocol::{Request, Response};
-use adblock_tests::*;
+use fuck_ads_core::protocol::{Request, Response};
+use fuck_ads_tests::*;
 use hickory_proto::rr::RecordType;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 

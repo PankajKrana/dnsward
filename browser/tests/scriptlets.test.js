@@ -30,7 +30,7 @@ function page(hostname, rules, extra = {}) {
   sandbox.window = sandbox;
   vm.createContext(sandbox);
   vm.runInContext(runtimeSource, sandbox);
-  const code = `(${sandbox.adblockScriptletRuntime.toString()})(${JSON.stringify({ rules })});`;
+  const code = `(${sandbox.fuckAdsScriptletRuntime.toString()})(${JSON.stringify({ rules })});`;
   vm.runInContext(code, sandbox);
   return sandbox;
 }

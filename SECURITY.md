@@ -6,7 +6,7 @@ Please **do not open a public issue** for security problems. Use GitHub's
 private vulnerability reporting ("Security" tab → "Report a vulnerability")
 or email security@example.com. Include:
 
-* affected version (`adblock --version`) and platform,
+* affected version (`fuck-ads --version`) and platform,
 * steps to reproduce or a proof of concept,
 * impact as you understand it.
 

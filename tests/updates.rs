@@ -1,11 +1,11 @@
 //! Filter-list updates: validation, atomic install, rollback, conditional
 //! requests and backoff.
 
-use adblock_core::rules::LiveFilter;
-use adblock_core::rules::UserRules;
-use adblock_core::update::{FetchResponse, Updater};
-use adblock_filter::{Category, Engine, HostVerdict};
-use adblock_tests::*;
+use fuck_ads_core::rules::LiveFilter;
+use fuck_ads_core::rules::UserRules;
+use fuck_ads_core::update::{FetchResponse, Updater};
+use fuck_ads_filter::{Category, Engine, HostVerdict};
+use fuck_ads_tests::*;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -225,10 +225,10 @@ async fn update_through_daemon_and_survives_restart() {
     );
     let d = env.start().await;
     let r = env
-        .control(adblock_core::protocol::Request::Update { force: false })
+        .control(fuck_ads_core::protocol::Request::Update { force: false })
         .await;
     assert!(
-        matches!(r, adblock_core::protocol::Response::Ok { .. }),
+        matches!(r, fuck_ads_core::protocol::Response::Ok { .. }),
         "{r:?}"
     );
     assert!(

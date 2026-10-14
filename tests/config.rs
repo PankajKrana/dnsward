@@ -1,6 +1,6 @@
 //! Configuration parsing and validation.
 
-use adblock_config::{BlockingMode, Config, DEFAULT_CONFIG_TOML, Upstream};
+use fuck_ads_config::{BlockingMode, Config, DEFAULT_CONFIG_TOML, Upstream};
 use std::path::Path;
 
 fn parse(text: &str) -> Result<Config, String> {
@@ -121,7 +121,7 @@ fn plain_upstreams_and_forward_zones() {
 #[test]
 fn load_missing_file_gives_defaults() {
     assert_eq!(
-        Config::load(Path::new("/nonexistent/adblock.toml")).unwrap(),
+        Config::load(Path::new("/nonexistent/fuck-ads.toml")).unwrap(),
         Config::default()
     );
 }

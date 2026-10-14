@@ -1,7 +1,7 @@
 //! Filter syntax compatibility, malformed input and scale.
 
-use adblock_filter::cosmetic::CosmeticAction;
-use adblock_filter::{
+use fuck_ads_filter::cosmetic::CosmeticAction;
+use fuck_ads_filter::{
     Category, Engine, EngineBuilder, HostVerdict, ListFormat, ParseError, Request, ResourceType,
     Rule, parse_line,
 };

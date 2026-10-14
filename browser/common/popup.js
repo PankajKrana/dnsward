@@ -13,10 +13,10 @@ async function render() {
   const info = await api.runtime.sendMessage({ type: 'popup-status', url: tab?.url });
   const s = info.status;
   if (!s) {
-    setState('bad', 'AdBlock service not reachable');
+    setState('bad', 'FuckAds service not reachable');
     $('hint').hidden = false;
     $('hint').textContent =
-      (info.error ? info.error + '. ' : '') + 'Make sure AdBlock is installed and run "adblock browser install".';
+      (info.error ? info.error + '. ' : '') + 'Make sure FuckAds is installed and run "fuck-ads browser install".';
     return;
   }
   if (info.error) {
@@ -37,7 +37,7 @@ async function render() {
   if (info.hasUserScriptsApi === false || info.userScripts === false) {
     $('hint').hidden = false;
     $('hint').textContent +=
-      ' For the most reliable YouTube blocking, enable "Allow User Scripts" for AdBlock in the browser\'s extension settings.';
+      ' For the most reliable YouTube blocking, enable "Allow User Scripts" for FuckAds in the browser\'s extension settings.';
   }
   if (info.host) {
     $('site').hidden = false;

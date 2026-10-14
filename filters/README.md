@@ -6,4 +6,4 @@
 * `youtube.txt`: YouTube compatibility rules (see `docs/youtube.md`).
 
 Both are plain filter-list files (data, not code). Installers copy them to
-`<prefix>/share/adblock/filters/`.
+`<prefix>/share/fuck-ads/filters/`.

@@ -3,140 +3,6 @@
 version = 4
 
 [[package]]
-name = "adblock-cli"
-version = "0.1.1"
-dependencies = [
- "adblock-config",
- "adblock-core",
- "adblock-dns",
- "adblock-filter",
- "adblock-platform",
- "adblock-stats",
- "anyhow",
- "clap",
- "libc",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "adblock-config"
-version = "0.1.1"
-dependencies = [
- "adblock-filter",
- "libc",
- "serde",
- "tempfile",
- "thiserror",
- "toml",
-]
-
-[[package]]
-name = "adblock-core"
-version = "0.1.1"
-dependencies = [
- "adblock-config",
- "adblock-dns",
- "adblock-filter",
- "adblock-proxy",
- "adblock-stats",
- "anyhow",
- "libc",
- "reqwest",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "thiserror",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "adblock-dns"
-version = "0.1.1"
-dependencies = [
- "adblock-config",
- "adblock-filter",
- "adblock-stats",
- "hickory-proto",
- "reqwest",
- "thiserror",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "adblock-filter"
-version = "0.1.1"
-dependencies = [
- "regex",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "adblock-platform"
-version = "0.1.1"
-dependencies = [
- "adblock-config",
- "anyhow",
- "libc",
- "serde",
- "serde_json",
- "tempfile",
- "tracing",
-]
-
-[[package]]
-name = "adblock-proxy"
-version = "0.1.1"
-dependencies = [
- "adblock-filter",
- "adblock-stats",
- "thiserror",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "adblock-stats"
-version = "0.1.1"
-dependencies = [
- "adblock-config",
- "adblock-filter",
- "libc",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "adblock-tests"
-version = "0.1.1"
-dependencies = [
- "adblock-cli",
- "adblock-config",
- "adblock-core",
- "adblock-dns",
- "adblock-filter",
- "adblock-platform",
- "adblock-stats",
- "clap",
- "criterion",
- "hickory-proto",
- "serde_json",
- "sha2",
- "tempfile",
- "tokio",
-]
-
-[[package]]
 name = "aho-corasick"
 version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -590,6 +456,140 @@ name = "fs_extra"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
+
+[[package]]
+name = "fuck-ads-cli"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "fuck-ads-config",
+ "fuck-ads-core",
+ "fuck-ads-dns",
+ "fuck-ads-filter",
+ "fuck-ads-platform",
+ "fuck-ads-stats",
+ "libc",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "fuck-ads-config"
+version = "0.2.0"
+dependencies = [
+ "fuck-ads-filter",
+ "libc",
+ "serde",
+ "tempfile",
+ "thiserror",
+ "toml",
+]
+
+[[package]]
+name = "fuck-ads-core"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "fuck-ads-config",
+ "fuck-ads-dns",
+ "fuck-ads-filter",
+ "fuck-ads-proxy",
+ "fuck-ads-stats",
+ "libc",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "fuck-ads-dns"
+version = "0.2.0"
+dependencies = [
+ "fuck-ads-config",
+ "fuck-ads-filter",
+ "fuck-ads-stats",
+ "hickory-proto",
+ "reqwest",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "fuck-ads-filter"
+version = "0.2.0"
+dependencies = [
+ "regex",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "fuck-ads-platform"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "fuck-ads-config",
+ "libc",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tracing",
+]
+
+[[package]]
+name = "fuck-ads-proxy"
+version = "0.2.0"
+dependencies = [
+ "fuck-ads-filter",
+ "fuck-ads-stats",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "fuck-ads-stats"
+version = "0.2.0"
+dependencies = [
+ "fuck-ads-config",
+ "fuck-ads-filter",
+ "libc",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "fuck-ads-tests"
+version = "0.2.0"
+dependencies = [
+ "clap",
+ "criterion",
+ "fuck-ads-cli",
+ "fuck-ads-config",
+ "fuck-ads-core",
+ "fuck-ads-dns",
+ "fuck-ads-filter",
+ "fuck-ads-platform",
+ "fuck-ads-stats",
+ "hickory-proto",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "tokio",
+]
 
 [[package]]
 name = "futures-channel"

@@ -1,11 +1,11 @@
 //! Rule lookup benchmarks: `cargo bench --bench filter_lookup`.
 //!
 //! Uses a synthetic list shaped like real ones (mostly hostname rules, some
-//! URL patterns and cosmetic filters). Set ADBLOCK_BENCH_LIST=/path/to/list
+//! URL patterns and cosmetic filters). Set FUCK_ADS_BENCH_LIST=/path/to/list
 //! to benchmark against a real downloaded list instead.
 
-use adblock_filter::{Engine, Request, ResourceType};
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
+use fuck_ads_filter::{Engine, Request, ResourceType};
 use std::hint::black_box;
 
 fn synthetic_list() -> String {
@@ -27,7 +27,7 @@ fn synthetic_list() -> String {
 }
 
 fn engine() -> Engine {
-    match std::env::var("ADBLOCK_BENCH_LIST") {
+    match std::env::var("FUCK_ADS_BENCH_LIST") {
         Ok(path) => Engine::from_rules(&std::fs::read_to_string(path).expect("readable list")),
         Err(_) => Engine::from_rules(&synthetic_list()),
     }

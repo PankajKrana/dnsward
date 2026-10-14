@@ -1,16 +1,16 @@
 # Contributing
 
-Thanks for helping! A few ground rules keep AdBlock trustworthy:
+Thanks for helping! A few ground rules keep FuckAds trustworthy:
 
 1. **Privacy first.** No telemetry, no remote logging, no storing allowed
    domains or URLs. Changes that add network connections must be documented
    in `docs/privacy.md`.
 2. **Never execute filter-list content.** New scriptlets are new reviewed
    functions in `browser/common/scriptlets.js`, plus an entry in
-   `adblock_filter::cosmetic::SCRIPTLETS`, plus tests.
+   `fuck_ads_filter::cosmetic::SCRIPTLETS`, plus tests.
 3. **No HTTPS interception, no root certificates.**
 4. **Keep the core platform-independent.** OS-specific code goes into
-   `adblock-platform`.
+   `fuck-ads-platform`.
 5. **Don't hard-code block lists in source.** Rules belong in list files.
 
 ## Workflow

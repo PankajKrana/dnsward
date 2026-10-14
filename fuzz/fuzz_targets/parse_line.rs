@@ -1,6 +1,6 @@
 #![no_main]
 //! Every line format must parse arbitrary input without panicking.
-use adblock_filter::{ListFormat, parse_line};
+use fuck_ads_filter::{ListFormat, parse_line};
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {

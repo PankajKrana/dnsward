@@ -1,0 +1,29 @@
+[package]
+name = "fuck-ads-cli"
+description = "The `fuck-ads` command: CLI, daemon entry point and browser native-messaging host"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "fuck-ads"
+path = "src/main.rs"
+
+[dependencies]
+fuck-ads-config.workspace = true
+fuck-ads-core.workspace = true
+fuck-ads-dns.workspace = true
+fuck-ads-filter.workspace = true
+fuck-ads-platform.workspace = true
+fuck-ads-stats.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+libc.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

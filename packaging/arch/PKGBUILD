@@ -1,6 +1,6 @@
-# Maintainer: AdBlock maintainers <maintainers@example.com>
-pkgname=adblock
-pkgver=0.1.1
+# Maintainer: FuckAds maintainers <maintainers@example.com>
+pkgname=fuck-ads
+pkgver=0.2.0
 pkgrel=1
 pkgdesc="System-wide ad and tracker blocking (filtering DNS resolver + browser extensions)"
 arch=('x86_64' 'aarch64')
@@ -8,10 +8,10 @@ url="https://github.com/PankajKrana/fuck-ads"
 license=('MIT')
 depends=('systemd' 'gcc-libs')
 makedepends=('cargo' 'clang')
-backup=('etc/adblock/config.toml')
-install=adblock.install
+backup=('etc/fuck-ads/config.toml')
+install=fuck-ads.install
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('e02e4cb14fd76ecb729857ede15c8acb91d5b6d1f33625312edff00a26f256e6')
+sha256sums=('SKIP')  # replace with the release tarball checksum
 
 prepare() {
     cd "fuck-ads-$pkgver"
@@ -22,7 +22,7 @@ prepare() {
 build() {
     cd "fuck-ads-$pkgver"
     export RUSTUP_TOOLCHAIN=stable CARGO_TARGET_DIR=target
-    cargo build --frozen --release -p adblock-cli
+    cargo build --frozen --release -p fuck-ads-cli
 }
 
 check() {
@@ -32,17 +32,17 @@ check() {
 
 package() {
     cd "fuck-ads-$pkgver"
-    install -Dm0755 target/release/adblock "$pkgdir/usr/bin/adblock"
-    ln -s adblock "$pkgdir/usr/bin/adblock-native-host"
-    install -dm0755 "$pkgdir/usr/share/adblock/filters"
-    install -m0644 filters/*.txt "$pkgdir/usr/share/adblock/filters/"
+    install -Dm0755 target/release/fuck-ads "$pkgdir/usr/bin/fuck-ads"
+    ln -s fuck-ads "$pkgdir/usr/bin/fuck-ads-native-host"
+    install -dm0755 "$pkgdir/usr/share/fuck-ads/filters"
+    install -m0644 filters/*.txt "$pkgdir/usr/share/fuck-ads/filters/"
     sh browser/build.sh >/dev/null
-    cp -R browser/dist/chromium browser/dist/firefox "$pkgdir/usr/share/adblock/"
+    cp -R browser/dist/chromium browser/dist/firefox "$pkgdir/usr/share/fuck-ads/"
     install -dm0755 "$pkgdir/usr/lib/systemd/system"
-    sed 's#/usr/local/bin/adblock#/usr/bin/adblock#g' platforms/linux/adblock.service > "$pkgdir/usr/lib/systemd/system/adblock.service"
-    install -Dm0644 crates/adblock-config/src/default-config.toml "$pkgdir/etc/adblock/config.toml"
+    sed 's#/usr/local/bin/fuck-ads#/usr/bin/fuck-ads#g' platforms/linux/fuck-ads.service > "$pkgdir/usr/lib/systemd/system/fuck-ads.service"
+    install -Dm0644 crates/fuck-ads-config/src/default-config.toml "$pkgdir/etc/fuck-ads/config.toml"
     install -Dm0644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
-    echo 'u adblock - "AdBlock DNS service" /var/lib/adblock' | install -Dm0644 /dev/stdin "$pkgdir/usr/lib/sysusers.d/adblock.conf"
-    echo 'd /var/lib/adblock 0755 root root -
-d /var/lib/adblock/data 0755 adblock adblock -' | install -Dm0644 /dev/stdin "$pkgdir/usr/lib/tmpfiles.d/adblock.conf"
+    echo 'u fuck-ads - "FuckAds DNS service" /var/lib/fuck-ads' | install -Dm0644 /dev/stdin "$pkgdir/usr/lib/sysusers.d/fuck-ads.conf"
+    echo 'd /var/lib/fuck-ads 0755 root root -
+d /var/lib/fuck-ads/data 0755 fuck-ads fuck-ads -' | install -Dm0644 /dev/stdin "$pkgdir/usr/lib/tmpfiles.d/fuck-ads.conf"
 }

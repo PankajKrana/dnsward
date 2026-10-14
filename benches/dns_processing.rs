@@ -3,11 +3,11 @@
 //! Measures the full in-process path (parse, filter, cache, serialize)
 //! without network I/O: blocked answers and cache hits.
 
-use adblock_config::Config;
-use adblock_dns::{Decision, QueryFilter, Resolver, ResolverConfig, Transport};
-use adblock_filter::{Category, Engine, HostVerdict};
-use adblock_stats::StatsStore;
 use criterion::{Criterion, criterion_group, criterion_main};
+use fuck_ads_config::Config;
+use fuck_ads_dns::{Decision, QueryFilter, Resolver, ResolverConfig, Transport};
+use fuck_ads_filter::{Category, Engine, HostVerdict};
+use fuck_ads_stats::StatsStore;
 use hickory_proto::op::{Message, MessageType, OpCode, Query};
 use hickory_proto::rr::{Name, RecordType};
 use std::hint::black_box;
@@ -46,7 +46,7 @@ fn bench(c: &mut Criterion) {
     let stats = Arc::new(StatsStore::open(None, true, true));
 
     // Upstream: the in-process mock from the test support crate.
-    let upstream = rt.block_on(adblock_tests::MockUpstream::start());
+    let upstream = rt.block_on(fuck_ads_tests::MockUpstream::start());
     let mut config = Config::default();
     config.dns.upstreams = vec![upstream.addr.to_string()];
     let resolver = Resolver::new(ResolverConfig::from_config(&config), filter, stats).unwrap();
@@ -69,7 +69,7 @@ fn bench(c: &mut Criterion) {
         })
     });
 
-    let local = query("adblock-probe.test.");
+    let local = query("fuck-ads-probe.test.");
     c.bench_function("dns/local_answer", |b| {
         b.iter(|| {
             rt.block_on(resolver.handle(black_box(&local), Transport::Udp))

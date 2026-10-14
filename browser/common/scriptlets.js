@@ -1,16 +1,16 @@
 /*
- * AdBlock scriptlet runtime.
+ * FuckAds scriptlet runtime.
  *
  * Runs in the page's MAIN world at document_start. It is injected as
- *   (adblockScriptletRuntime.toString())(JSON.stringify(bundle))
+ *   (fuckAdsScriptletRuntime.toString())(JSON.stringify(bundle))
  * so filter lists contribute *data only*: a scriptlet name (which must be
  * one of the functions below) and string arguments. Nothing from a filter
  * list is ever evaluated as code.
  *
  * The function must be self-contained: no references to outer scope.
  */
-/* exported adblockScriptletRuntime */
-function adblockScriptletRuntime(bundle) {
+/* exported fuckAdsScriptletRuntime */
+function fuckAdsScriptletRuntime(bundle) {
   'use strict';
   if (!bundle || !Array.isArray(bundle.rules)) return;
   const host = location.hostname;
@@ -408,4 +408,4 @@ function adblockScriptletRuntime(bundle) {
   }
 }
 
-if (typeof module !== 'undefined') module.exports = { adblockScriptletRuntime };
+if (typeof module !== 'undefined') module.exports = { fuckAdsScriptletRuntime };

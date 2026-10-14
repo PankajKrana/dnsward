@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "AdBlock",
-  "version": "0.1.1",
-  "description": "Blocks ads and trackers using the AdBlock system service. No data leaves your computer.",
+  "name": "FuckAds",
+  "version": "0.2.0",
+  "description": "Blocks ads and trackers using the FuckAds system service. No data leaves your computer.",
   "browser_specific_settings": {
-    "gecko": { "id": "adblock@adblock.local", "strict_min_version": "128.0" }
+    "gecko": { "id": "fuck-ads@fuck-ads.local", "strict_min_version": "128.0" }
   },
   "permissions": [
     "declarativeNetRequest",
@@ -31,7 +31,7 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "AdBlock",
+    "default_title": "FuckAds",
     "default_icon": { "16": "icons/16.png", "32": "icons/32.png" }
   },
   "icons": { "16": "icons/16.png", "32": "icons/32.png", "48": "icons/48.png", "128": "icons/128.png" }

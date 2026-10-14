@@ -3,8 +3,8 @@
 ## How it works
 
 The extension contains no filter lists and never downloads anything itself.
-It talks to the local AdBlock service through **native messaging**: the
-browser starts `adblock-native-host`, which forwards a fixed set of
+It talks to the local FuckAds service through **native messaging**: the
+browser starts `fuck-ads-native-host`, which forwards a fixed set of
 read-only requests to the daemon's control socket.
 
 | Feature | Mechanism |
@@ -22,15 +22,15 @@ The extension re-syncs every 5 minutes, and immediately after rule updates
 ## Install
 
 ```sh
-adblock browser install                 # per user, for every detected browser
-sudo adblock browser install --system   # all users (the installers do this)
+fuck-ads browser install                 # per user, for every detected browser
+sudo fuck-ads browser install --system   # all users (the installers do this)
 ```
 
 The system-wide registration covers Chrome, Chromium, Edge and Firefox. Brave
 and Vivaldi are only registered by the per-user command.
 
-Get the extension folder from the release (`adblock-chromium.zip`,
-`adblock-firefox.zip`), from `<prefix>/share/adblock/` (the script installers
+Get the extension folder from the release (`fuck-ads-chromium.zip`,
+`fuck-ads-firefox.zip`), from `<prefix>/share/fuck-ads/` (the script installers
 use `browser/chromium`; Homebrew, `.deb`, `.rpm` and Arch use `chromium` and
 `firefox` directly), or from `browser/dist/` after `./browser/build.sh`. Then:
 
@@ -47,19 +47,19 @@ use `browser/chromium`; Homebrew, `.deb`, `.rpm` and Arch use `chromium` and
 The extension ID for unpacked Chromium installs is fixed by the public key
 in `browser/chromium/manifest.json` (`chlpacjmjgeglnhaedpfiffkdfakeana`).
 Store-published builds get a different ID; register it with
-`adblock browser install --extension-id <id>`.
+`fuck-ads browser install --extension-id <id>`.
 
 ## Safari
 
 See [browser/safari/README.md](../browser/safari/README.md). Safari requires
-a signed Xcode app for any extension; AdBlock exports Safari content-blocker
-rules with `adblock browser export-safari <file>`.
+a signed Xcode app for any extension; FuckAds exports Safari content-blocker
+rules with `fuck-ads browser export-safari <file>`.
 
 ## Why not system-wide HTTPS filtering?
 
 Filtering inside HTTPS from outside the browser requires a man-in-the-middle
 proxy and a custom root certificate. That weakens the security of every TLS
-connection on the machine, so AdBlock deliberately does not do it. Browser
+connection on the machine, so FuckAds deliberately does not do it. Browser
 APIs give the same filtering power safely.
 
 A proposal for what could be done for non-browser apps, and under what

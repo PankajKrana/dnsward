@@ -1,12 +1,12 @@
 //! Shared helpers for integration tests: a mock upstream DNS server, a mock
 //! filter-list fetcher and an in-process daemon bound to random ports.
 
-use adblock_config::{Config, FilterList, Paths};
-use adblock_core::control;
-use adblock_core::protocol::{Request, Response};
-use adblock_core::update::{BoxFuture, FetchRequest, FetchResponse, Fetcher};
-use adblock_core::{Daemon, RunningDaemon};
-use adblock_filter::{Category, ListFormat};
+use fuck_ads_config::{Config, FilterList, Paths};
+use fuck_ads_core::control;
+use fuck_ads_core::protocol::{Request, Response};
+use fuck_ads_core::update::{BoxFuture, FetchRequest, FetchResponse, Fetcher};
+use fuck_ads_core::{Daemon, RunningDaemon};
+use fuck_ads_filter::{Category, ListFormat};
 use hickory_proto::op::{Message, MessageType, OpCode, Query, ResponseCode};
 use hickory_proto::rr::rdata::{A, AAAA, CNAME};
 use hickory_proto::rr::{Name, RData, Record, RecordType};
@@ -268,7 +268,7 @@ pub async fn query(server: SocketAddr, name: &str, rtype: RecordType) -> Option<
     msg.metadata.recursion_desired = true;
     msg.add_query(Query::query(Name::from_ascii(name).unwrap(), rtype));
     let bytes = msg.to_vec().unwrap();
-    let resp = adblock_dns::upstream::plain_exchange(server, &bytes, Duration::from_secs(3))
+    let resp = fuck_ads_dns::upstream::plain_exchange(server, &bytes, Duration::from_secs(3))
         .await
         .ok()?;
     Message::from_vec(&resp).ok()
@@ -278,14 +278,14 @@ pub async fn query(server: SocketAddr, name: &str, rtype: RecordType) -> Option<
 pub async fn query_tcp(server: SocketAddr, name: &str, rtype: RecordType) -> Option<Message> {
     let mut msg = Message::new(rand_id(), MessageType::Query, OpCode::Query);
     msg.add_query(Query::query(Name::from_ascii(name).unwrap(), rtype));
-    let resp = adblock_dns::upstream::tcp_exchange(server, &msg.to_vec().unwrap())
+    let resp = fuck_ads_dns::upstream::tcp_exchange(server, &msg.to_vec().unwrap())
         .await
         .ok()?;
     Message::from_vec(&resp).ok()
 }
 
 pub fn rand_id() -> u16 {
-    adblock_dns::upstream::rand_id()
+    fuck_ads_dns::upstream::rand_id()
 }
 
 pub fn first_ip(msg: &Message) -> Option<std::net::IpAddr> {
