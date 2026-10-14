@@ -11,27 +11,27 @@ makedepends=('cargo' 'clang')
 backup=('etc/adblock/config.toml')
 install=adblock.install
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('SKIP')  # replace with the release tarball checksum
+sha256sums=('bb050cdc825d2aec65798715192b7028ab904c4baf824d0cf02738736896c1cc')
 
 prepare() {
-    cd "$pkgname-$pkgver"
+    cd "dnsward-$pkgver"
     export RUSTUP_TOOLCHAIN=stable
     cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
 }
 
 build() {
-    cd "$pkgname-$pkgver"
+    cd "dnsward-$pkgver"
     export RUSTUP_TOOLCHAIN=stable CARGO_TARGET_DIR=target
     cargo build --frozen --release -p adblock-cli
 }
 
 check() {
-    cd "$pkgname-$pkgver"
+    cd "dnsward-$pkgver"
     cargo test --frozen --workspace --lib
 }
 
 package() {
-    cd "$pkgname-$pkgver"
+    cd "dnsward-$pkgver"
     install -Dm0755 target/release/adblock "$pkgdir/usr/bin/adblock"
     ln -s adblock "$pkgdir/usr/bin/adblock-native-host"
     install -dm0755 "$pkgdir/usr/share/adblock/filters"
