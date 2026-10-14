@@ -62,9 +62,14 @@ and swap the Unix socket for a named pipe in `adblock-core::control`.
   request. Safari's content blocker cannot rewrite URLs, so they are
   not exported there.
 * **Redirects.** `$redirect=noop.js` (also `noop.css`, `noop.html`,
-  `noop.txt`, `1x1.gif`, `2x2.png` and their uBO/ABP aliases) blocks the
-  request and serves a neutral stub packaged in
+  `noop.txt`, `1x1.gif`, `2x2.png`, plus analytics stand-ins `ga.js`,
+  `analytics.js`, `gtm.js`, `gpt.js`, `apstag.js` and `beacon.js`, each with
+  its uBO/ABP aliases such as `google-analytics.com/analytics.js`) blocks
+  the request and serves a neutral stub packaged in
   `browser/common/resources/`, so pages that expect the file keep working.
+  The analytics stubs are original code: they define the globals pages call
+  (`ga()`, `dataLayer`, `googletag`, `apstag`), run queued callbacks and
+  report nothing. They are tested in `browser/tests/resources.test.js`.
   Only names in `adblock_filter::resources` are accepted; unknown names,
   `$redirect-rule` and exception forms are skipped. Redirect filters never
   apply to top-level documents and are kept out of the DNS layer (the page

@@ -15,6 +15,54 @@ const RESOURCES: &[(&[&str], &str)] = &[
     (&["noop.txt", "nooptext"], "noop.txt"),
     (&["1x1.gif", "1x1-transparent.gif"], "1x1.gif"),
     (&["2x2.png", "2x2-transparent.png"], "2x2.png"),
+    (
+        &[
+            "google-analytics.com/ga.js",
+            "google-analytics_ga.js",
+            "ga.js",
+        ],
+        "ga.js",
+    ),
+    (
+        &[
+            "google-analytics.com/analytics.js",
+            "google-analytics_analytics.js",
+            "analytics.js",
+        ],
+        "analytics.js",
+    ),
+    (
+        &[
+            "googletagmanager.com/gtm.js",
+            "googletagmanager_gtm.js",
+            "gtm.js",
+        ],
+        "gtm.js",
+    ),
+    (
+        &[
+            "googletagservices.com/gpt.js",
+            "googletagservices_gpt.js",
+            "gpt.js",
+        ],
+        "gpt.js",
+    ),
+    (
+        &[
+            "amazon-adsystem.com/aax2/apstag.js",
+            "amazon_apstag.js",
+            "apstag.js",
+        ],
+        "apstag.js",
+    ),
+    (
+        &[
+            "scorecardresearch.com/beacon.js",
+            "scorecardresearch_beacon.js",
+            "beacon.js",
+        ],
+        "beacon.js",
+    ),
 ];
 
 /// Maps a `$redirect=` value to the packaged file name.
@@ -41,6 +89,8 @@ mod tests {
         assert_eq!(lookup("1X1-Transparent.GIF"), Some("1x1.gif"));
         assert_eq!(lookup("../evil.js"), None);
         assert_eq!(lookup("google-analytics.js"), None);
+        assert_eq!(lookup("Google-Analytics.com/GA.js"), Some("ga.js"));
+        assert_eq!(lookup("googletagservices_gpt.js"), Some("gpt.js"));
     }
 
     #[test]
