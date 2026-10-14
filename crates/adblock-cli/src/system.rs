@@ -7,11 +7,13 @@
 //! * The system resolver is only pointed at AdBlock while the service is
 //!   running (`stop` restores DNS; `start` re-applies it).
 
-use crate::cli::EnforceDnsAction;
+use crate::cli::{EnforceDnsAction, ProxyAction};
 use crate::context::{Ctx, system_dns_routing, system_resolution_works};
 use crate::output::DnsRouting;
 use adblock_core::protocol::{Request, Response};
-use adblock_platform::{FirewallPlan, Platform, ServiceStatus, SystemState, browser};
+use adblock_platform::{
+    FirewallPlan, Platform, ProxyConfigState, ServiceStatus, SystemState, browser,
+};
 use anyhow::{Context, Result, bail};
 use std::io::Write;
 use std::net::SocketAddr;
@@ -299,6 +301,235 @@ pub async fn enforce_dns(ctx: &Ctx, action: &EnforceDnsAction) -> Result<()> {
     }
 }
 
+/// Restores the system proxy settings if `adblock proxy on` changed them.
+/// Done before DNS is restored and before the service stops, so no client is
+/// left pointing at a proxy that is about to disappear.
+fn remove_proxy_setting(ctx: &Ctx, platform: &dyn Platform, state: &mut SystemState) -> Result<()> {
+    if let Some(backup) = state.proxy.clone() {
+        platform.proxy_restore(&backup)?;
+        state.proxy = None;
+        state.save(&ctx.paths.system_state_file())?;
+        step(ctx, "Previous system proxy settings restored");
+    }
+    Ok(())
+}
+
+/// The PAC URL of the running proxy, or `None` if the daemon is not running
+/// or the proxy is off.
+async fn proxy_pac_url(ctx: &Ctx) -> Option<(SocketAddr, String)> {
+    let Ok(Response::Status(s)) = ctx.request(Request::Status).await else {
+        return None;
+    };
+    let addr: SocketAddr = s.proxy_listen.iter().find_map(|a| a.parse().ok())?;
+    Some((addr, format!("http://{addr}/proxy.pac")))
+}
+
+/// Whether the proxy at `addr` really serves its PAC file.
+async fn pac_served(addr: SocketAddr) -> bool {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let attempt = async {
+        let mut s = tokio::net::TcpStream::connect(addr).await.ok()?;
+        s.write_all(b"GET /proxy.pac HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+            .await
+            .ok()?;
+        let mut out = Vec::new();
+        s.take(16 * 1024).read_to_end(&mut out).await.ok()?;
+        let text = String::from_utf8_lossy(&out);
+        (text.starts_with("HTTP/1.1 200") && text.contains("FindProxyForURL")).then_some(())
+    };
+    matches!(
+        tokio::time::timeout(Duration::from_secs(3), attempt).await,
+        Ok(Some(()))
+    )
+}
+
+/// Sets the system proxy, verifying and rolling back on failure.
+async fn apply_proxy(
+    ctx: &Ctx,
+    platform: &dyn Platform,
+    state: &mut SystemState,
+    addr: SocketAddr,
+    pac_url: &str,
+) -> Result<()> {
+    let state_file = ctx.paths.system_state_file();
+    // Persist the backup first, like the DNS settings.
+    let plan = match &state.proxy {
+        Some(existing) => existing.clone(),
+        None => {
+            let plan = platform.proxy_plan(pac_url)?;
+            state.proxy = Some(plan.clone());
+            state.save(&state_file)?;
+            plan
+        }
+    };
+    let rollback = |state: &mut SystemState| -> Result<()> {
+        let result = platform.proxy_restore(&plan);
+        state.proxy = None;
+        state.save(&state_file)?;
+        result
+    };
+    if let Err(e) = platform.proxy_apply(&plan, pac_url) {
+        let _ = rollback(state);
+        return Err(
+            e.context("could not change the system proxy settings; previous settings restored")
+        );
+    }
+    let active = platform.proxy_config_state(pac_url) == ProxyConfigState::Active;
+    if !active || !pac_served(addr).await || !system_resolution_works().await {
+        rollback(state)
+            .context("verification failed AND restoring the previous proxy settings failed")?;
+        bail!(
+            "the system proxy could not be verified (settings applied: {active}), so the previous \
+             settings were restored. Check `adblock logs` and `adblock doctor`."
+        );
+    }
+    step(ctx, "System proxy now uses AdBlock");
+    Ok(())
+}
+
+fn print_manual_instructions(pac_url: &str) {
+    println!("To use the proxy, point an app or system at this PAC URL:\n\n    {pac_url}\n");
+    if cfg!(target_os = "macos") {
+        println!(
+            "macOS: `sudo adblock proxy on` sets it for every network service \
+             (System Settings → Network → Proxies → Automatic Proxy Configuration)."
+        );
+    } else {
+        println!(
+            "Linux has no system-wide proxy setting that a service can change safely. Set it in \
+             your desktop (GNOME: Settings → Network → Network Proxy → Automatic) or per app, or \
+             use it directly: http_proxy=http://127.0.0.1:8118"
+        );
+    }
+}
+
+pub async fn proxy(ctx: &Ctx, action: &ProxyAction) -> Result<()> {
+    let platform = adblock_platform::current();
+    match action {
+        ProxyAction::Show => {
+            let config = ctx.config()?;
+            let pac_url = match proxy_pac_url(ctx).await {
+                Some((_, url)) => url,
+                None => {
+                    let addr = config
+                        .proxy_listen_addrs()
+                        .into_iter()
+                        .next()
+                        .context("proxy.listen has no usable address")?;
+                    println!(
+                        "The proxy is not running{}.\n",
+                        if config.proxy.enabled {
+                            ""
+                        } else {
+                            " ([proxy] enabled = false in the configuration)"
+                        }
+                    );
+                    format!("http://{addr}/proxy.pac")
+                }
+            };
+            print_manual_instructions(&pac_url);
+            Ok(())
+        }
+        ProxyAction::Status => {
+            let running = proxy_pac_url(ctx).await;
+            let (served, system) = match &running {
+                Some((addr, url)) => (
+                    pac_served(*addr).await,
+                    Some(platform.proxy_config_state(url)),
+                ),
+                None => (false, None),
+            };
+            if ctx.json {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "running": running.is_some(),
+                        "pac_served": served,
+                        "system_configured": system == Some(ProxyConfigState::Active),
+                        "supported": platform.proxy_supported(),
+                    })
+                );
+                return Ok(());
+            }
+            match (&running, &system) {
+                (None, _) => println!(
+                    "Proxy: not running. Enable it with `[proxy] enabled = true` in the \
+                     configuration, then `sudo adblock restart`."
+                ),
+                (Some((addr, _)), Some(ProxyConfigState::Active)) => {
+                    println!("Proxy: running on {addr}; the system uses it.");
+                }
+                (Some((addr, _)), Some(ProxyConfigState::Inactive(why))) => {
+                    println!("Proxy: running on {addr}; not used by the system ({why}).");
+                    if platform.proxy_supported() {
+                        println!("Use it with: sudo adblock proxy on");
+                    }
+                }
+                _ => {}
+            }
+            if running.is_some() && !served {
+                println!(
+                    "{} the proxy is not answering PAC requests",
+                    ctx.style.yellow("!")
+                );
+            }
+            Ok(())
+        }
+        ProxyAction::Off => {
+            require_root("proxy off")?;
+            let mut state = SystemState::load(&ctx.paths.system_state_file())?;
+            let had = state.proxy.is_some();
+            remove_proxy_setting(ctx, platform.as_ref(), &mut state)?;
+            if state.proxy_intent {
+                state.proxy_intent = false;
+                state.save(&ctx.paths.system_state_file())?;
+            }
+            if !had {
+                println!("The system proxy was not changed by AdBlock; nothing to restore.");
+            }
+            Ok(())
+        }
+        ProxyAction::On => {
+            require_root("proxy on")?;
+            let config = ctx.config().context("the configuration file is invalid")?;
+            if !config.proxy.enabled {
+                bail!(
+                    "the proxy is off. Set `enabled = true` under [proxy] in the configuration, \
+                     then run `sudo adblock restart`."
+                );
+            }
+            let Some((addr, pac_url)) = proxy_pac_url(ctx).await else {
+                bail!(
+                    "the proxy is not running; run `sudo adblock restart` and check `adblock logs`"
+                );
+            };
+            if !platform.proxy_supported() {
+                print_manual_instructions(&pac_url);
+                bail!(
+                    "`adblock proxy on` is not supported on this platform; see the instructions above"
+                );
+            }
+            if !pac_served(addr).await {
+                bail!(
+                    "the proxy is listening on {addr} but does not serve its PAC file; see `adblock logs`"
+                );
+            }
+            let mut state = SystemState::load(&ctx.paths.system_state_file())?;
+            apply_proxy(ctx, platform.as_ref(), &mut state, addr, &pac_url).await?;
+            state.proxy_intent = true;
+            state.save(&ctx.paths.system_state_file())?;
+            if !ctx.json {
+                println!(
+                    "\nApps that follow the system proxy now send HTTP/HTTPS through AdBlock. Local \
+                     addresses go direct, and the PAC file falls back to DIRECT if the proxy stops.\n\
+                     Undo with: sudo adblock proxy off"
+                );
+            }
+            Ok(())
+        }
+    }
+}
+
 pub async fn enable(ctx: &Ctx) -> Result<()> {
     require_root("enable")?;
     let config = ctx
@@ -360,11 +591,13 @@ pub async fn disable(ctx: &Ctx) -> Result<()> {
     let state_file = ctx.paths.system_state_file();
     let mut state = SystemState::load(&state_file)?;
     remove_firewall(ctx, platform.as_ref(), &mut state)?;
+    remove_proxy_setting(ctx, platform.as_ref(), &mut state)?;
     restore_dns(ctx, platform.as_ref(), &mut state)?;
     platform.service_stop()?;
     step(ctx, "Service stopped (and disabled at boot)");
     state.enabled = false;
     state.enforce_dns = false;
+    state.proxy_intent = false;
     state.save(&state_file)?;
     if !ctx.json {
         println!("\nAdBlock is off. Turn it back on with: sudo adblock enable");
@@ -400,6 +633,17 @@ pub async fn start(ctx: &Ctx) -> Result<()> {
                 ctx.style.yellow("!")
             );
         }
+        // Likewise the system proxy setting, if the proxy is running again.
+        if state.proxy_intent
+            && state.proxy.is_none()
+            && let Some((addr, pac_url)) = proxy_pac_url(ctx).await
+            && let Err(e) = apply_proxy(ctx, platform.as_ref(), &mut state, addr, &pac_url).await
+        {
+            eprintln!(
+                "{} the system proxy setting could not be re-applied: {e:#}",
+                ctx.style.yellow("!")
+            );
+        }
     } else if !state.enabled && !ctx.json {
         println!(
             "  System DNS is unchanged. Run `sudo adblock enable` to route it through AdBlock."
@@ -415,6 +659,7 @@ pub async fn stop(ctx: &Ctx) -> Result<()> {
     // Never leave the system pointing at a resolver that is not running, or
     // blocking the resolvers it is about to go back to.
     remove_firewall(ctx, platform.as_ref(), &mut state)?;
+    remove_proxy_setting(ctx, platform.as_ref(), &mut state)?;
     restore_dns(ctx, platform.as_ref(), &mut state)?;
     platform.service_stop()?;
     step(ctx, "Service stopped");
@@ -469,6 +714,12 @@ pub async fn uninstall(ctx: &Ctx, yes: bool, purge: bool) -> Result<()> {
     if let Err(e) = remove_firewall(ctx, platform.as_ref(), &mut state) {
         eprintln!(
             "{} could not remove the DNS bypass rules automatically: {e:#}",
+            ctx.style.red("✗")
+        );
+    }
+    if let Err(e) = remove_proxy_setting(ctx, platform.as_ref(), &mut state) {
+        eprintln!(
+            "{} could not restore the system proxy settings automatically: {e:#}",
             ctx.style.red("✗")
         );
     }

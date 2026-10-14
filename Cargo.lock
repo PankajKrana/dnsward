@@ -125,6 +125,7 @@ dependencies = [
  "adblock-core",
  "adblock-dns",
  "adblock-filter",
+ "adblock-platform",
  "adblock-stats",
  "clap",
  "criterion",

@@ -52,6 +52,14 @@ fn every_documented_command_parses() {
         vec!["adblock", "stats", "reset"],
         vec!["adblock", "logs", "--follow"],
         vec!["adblock", "update", "--force"],
+        vec!["adblock", "proxy", "on"],
+        vec!["adblock", "proxy", "off"],
+        vec!["adblock", "proxy", "status"],
+        vec!["adblock", "proxy", "show"],
+        vec!["adblock", "enforce-dns", "on"],
+        vec!["adblock", "enforce-dns", "off"],
+        vec!["adblock", "enforce-dns", "status"],
+        vec!["adblock", "enforce-dns", "show"],
     ] {
         Cli::try_parse_from(&args).unwrap_or_else(|e| panic!("{args:?}: {e}"));
     }
@@ -121,6 +129,42 @@ fn stats_and_rules_rendering() {
         ..Default::default()
     }];
     assert!(render_rules(&lists, Style { color: false }, 0).contains("Total: 1,234 rules"));
+}
+
+/// Read-only proxy commands against a daemon whose proxy is running. `proxy
+/// on` is deliberately not run here: as root it would change the real system
+/// proxy settings.
+#[tokio::test(flavor = "multi_thread")]
+async fn proxy_commands_report_the_running_proxy() {
+    let mut env = TestEnv::new().await;
+    env.config.proxy.enabled = true;
+    env.config.proxy.listen = vec!["127.0.0.1:0".into()];
+    env.config.paths.data_dir = Some(env.paths.data_dir.clone());
+    env.config.paths.socket = Some(env.paths.socket.clone());
+    let config_file = env.dir.path().join("cli-config.toml");
+    std::fs::write(&config_file, env.config.to_toml()).unwrap();
+    let cfg = config_file.to_str().unwrap().to_string();
+    let call = |rest: &[&str]| {
+        let mut v = vec!["--user", "--config", cfg.as_str(), "--no-color"];
+        v.extend_from_slice(rest);
+        run(&v)
+    };
+
+    // Daemon down: informational commands still work.
+    assert_eq!(call(&["proxy", "status"]), ExitCode::SUCCESS);
+    assert_eq!(call(&["proxy", "show"]), ExitCode::SUCCESS);
+
+    let d = env.start().await;
+    assert_eq!(d.proxy_addrs.len(), 1);
+    assert_eq!(call(&["proxy", "status"]), ExitCode::SUCCESS);
+    assert_eq!(call(&["--json", "proxy", "status"]), ExitCode::SUCCESS);
+    assert_eq!(call(&["proxy", "show"]), ExitCode::SUCCESS);
+    // Changing system settings needs root; refused otherwise.
+    if !adblock_platform::is_root() {
+        assert_eq!(call(&["proxy", "on"]), ExitCode::FAILURE);
+        assert_eq!(call(&["proxy", "off"]), ExitCode::FAILURE);
+    }
+    d.shutdown().await;
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -51,6 +51,8 @@ pub enum Command {
     Restart,
     /// Stop apps from bypassing system DNS (hardcoded resolvers, DNS-over-HTTPS).
     EnforceDns(EnforceDnsArgs),
+    /// Use the local filtering proxy as the system proxy (macOS), or show how.
+    Proxy(ProxyArgs),
     /// Temporarily stop filtering without changing system settings.
     Pause,
     /// Resume filtering after `pause`.
@@ -95,6 +97,25 @@ pub enum Command {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
+}
+
+#[derive(Debug, Args)]
+pub struct ProxyArgs {
+    #[command(subcommand)]
+    pub action: ProxyAction,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ProxyAction {
+    /// Point every network service at the proxy's PAC file (macOS). The
+    /// previous settings are saved and restored by `off`.
+    On,
+    /// Restore the previous system proxy settings.
+    Off,
+    /// Show whether the proxy is running and whether the system uses it.
+    Status,
+    /// Print the PAC URL and what `on` would change, without changing anything.
+    Show,
 }
 
 #[derive(Debug, Args)]

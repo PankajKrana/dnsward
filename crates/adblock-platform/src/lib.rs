@@ -64,6 +64,30 @@ pub enum DnsBackup {
     },
 }
 
+/// One network service's automatic-proxy (PAC) setting before AdBlock changed
+/// it (macOS).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ServiceProxy {
+    pub service: String,
+    pub url: Option<String>,
+    pub enabled: bool,
+}
+
+/// The system proxy settings replaced by `adblock proxy on`, so `off` can put
+/// back exactly what was there.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProxyBackup {
+    pub services: Vec<ServiceProxy>,
+}
+
+/// Whether the system is configured to use AdBlock's PAC file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProxyConfigState {
+    Active,
+    /// Not configured; the string describes what was found.
+    Inactive(String),
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SystemState {
     /// The user ran `enable` (and not `disable`).
@@ -77,6 +101,12 @@ pub struct SystemState {
     /// The user wants DNS bypass protection; `start` re-applies it.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub enforce_dns: bool,
+    /// System proxy settings replaced by `adblock proxy on` (to restore).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub proxy: Option<ProxyBackup>,
+    /// The user wants the system to use the AdBlock proxy; `start` re-applies it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub proxy_intent: bool,
 }
 
 impl SystemState {
@@ -137,6 +167,27 @@ pub trait Platform {
     /// Static inspection of the configuration (complements the live probe).
     fn dns_config_state(&self, listen: &[SocketAddr]) -> DnsConfigState;
     fn flush_dns_cache(&self) {}
+
+    /// Whether the system proxy can be configured from here (macOS only;
+    /// Linux has no universal system proxy setting).
+    fn proxy_supported(&self) -> bool {
+        false
+    }
+    /// Records the current proxy settings of every network service. Changes
+    /// nothing.
+    fn proxy_plan(&self, _pac_url: &str) -> Result<ProxyBackup> {
+        anyhow::bail!("configuring the system proxy is not supported on this platform")
+    }
+    /// Points every network service at the PAC file.
+    fn proxy_apply(&self, _plan: &ProxyBackup, _pac_url: &str) -> Result<()> {
+        anyhow::bail!("configuring the system proxy is not supported on this platform")
+    }
+    fn proxy_restore(&self, _backup: &ProxyBackup) -> Result<()> {
+        Ok(())
+    }
+    fn proxy_config_state(&self, _pac_url: &str) -> ProxyConfigState {
+        ProxyConfigState::Inactive("not supported on this platform".into())
+    }
 
     /// The firewall rules that would be loaded, for `enforce-dns show`.
     /// `None` where DNS bypass protection is unsupported.
@@ -304,6 +355,14 @@ mod tests {
                 pf_token: Some("42".into()),
             }),
             enforce_dns: true,
+            proxy: Some(ProxyBackup {
+                services: vec![ServiceProxy {
+                    service: "Wi-Fi".into(),
+                    url: Some("http://corp.example/proxy.pac".into()),
+                    enabled: true,
+                }],
+            }),
+            proxy_intent: true,
         };
         state.save(&path).unwrap();
         assert_eq!(SystemState::load(&path).unwrap(), state);
@@ -324,6 +383,8 @@ mod tests {
         assert!(state.enabled);
         assert_eq!(state.firewall, None);
         assert!(!state.enforce_dns);
+        assert_eq!(state.proxy, None);
+        assert!(!state.proxy_intent);
     }
 
     #[test]

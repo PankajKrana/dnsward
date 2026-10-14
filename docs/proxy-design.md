@@ -124,9 +124,10 @@ below); it has not yet been exercised end-to-end on a live system.
 ## Phase 2: explicit forward proxy (option C)
 
 **Status: the proxy is implemented and off by default** (`[proxy] enabled =
-true`, crate `adblock-proxy`, run by the daemon). **Not yet done:** setting
-it as the system proxy automatically, and per-app attribution. Both are
-described below and remain open.
+true`, crate `adblock-proxy`, run by the daemon), and `adblock proxy
+on | off | status | show` sets it as the macOS system proxy. **Not yet
+done:** per-app attribution, and automatic system configuration on Linux
+(which has no system-wide proxy setting a service can change safely).
 
 ```text
 app ──CONNECT host:443──► adblock-proxy (127.0.0.1:8118)
@@ -169,12 +170,21 @@ Deliberate limits:
 * **No per-app attribution yet.** The proxy does not look up which process
   owns the client socket; that is the remaining reason to prefer this over
   DNS alone and is not built.
-* **No automatic system configuration.** Clients must be pointed at
-  `http://127.0.0.1:8118/proxy.pac` by hand (macOS: System Settings → Network
-  → Proxies → Automatic Proxy Configuration). The planned
-  `adblock proxy on/off` would follow the same persist, verify and roll back
-  pattern as DNS, and remove the setting if the proxy is down. The PAC file
-  already falls back to DIRECT.
+* **System configuration is macOS-only and explicit.** `sudo adblock proxy
+  on` sets the PAC URL (`http://127.0.0.1:8118/proxy.pac`) on every network
+  service with `networksetup`, after saving each service's previous
+  automatic-proxy setting in the root-only system state. It refuses to run
+  unless `[proxy] enabled = true` and the daemon's proxy is really serving
+  the PAC file, only ever writes a validated loopback PAC URL, verifies the
+  result (settings read back, PAC reachable, name resolution still working)
+  and rolls back on failure. `off`, `stop`, `disable` and `uninstall` restore
+  the previous settings before DNS is restored and the service stops;
+  `start` re-applies the setting if the user had it on. The PAC file falls
+  back to DIRECT, so a stopped proxy does not cut anyone off. On Linux the
+  command prints the PAC URL and how to set it in the desktop or per app.
+  A service that had a manual PAC before keeps it after `off`; a service that
+  had none may keep our URL stored but disabled on macOS versions that refuse
+  to clear it.
 * **Value check.** As the assessment above predicted, hostname decisions in
   the proxy duplicate the DNS filter; the new capability is URL rules for
   plain `http://` traffic, which is a small and shrinking share of traffic.

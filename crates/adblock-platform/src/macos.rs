@@ -8,8 +8,8 @@
 use crate::cmd::{run, stdout, succeeds};
 use crate::firewall::{FirewallPlan, FirewallState, PF_ANCHOR, render_pf};
 use crate::{
-    DnsBackup, DnsConfigState, LAUNCHD_LABEL, LogSource, Platform, SERVICE_USER_MACOS,
-    ServiceStatus, resolver_addresses,
+    DnsBackup, DnsConfigState, LAUNCHD_LABEL, LogSource, Platform, ProxyBackup, ProxyConfigState,
+    SERVICE_USER_MACOS, ServiceProxy, ServiceStatus, resolver_addresses,
 };
 use anyhow::{Context, Result, bail};
 use std::net::SocketAddr;
@@ -56,6 +56,65 @@ fn parse_dns_servers(out: &str) -> Vec<String> {
         .filter(|l| l.parse::<std::net::IpAddr>().is_ok())
         .map(String::from)
         .collect()
+}
+
+/// Parses `networksetup -getautoproxyurl` ("URL: ...\nEnabled: Yes").
+fn parse_autoproxy(out: &str) -> (Option<String>, bool) {
+    let mut url = None;
+    let mut enabled = false;
+    for line in out.lines() {
+        if let Some(v) = line.trim().strip_prefix("URL:") {
+            let v = v.trim();
+            if !v.is_empty() && v != "(null)" {
+                url = Some(v.to_string());
+            }
+        } else if let Some(v) = line.trim().strip_prefix("Enabled:") {
+            enabled = v.trim().eq_ignore_ascii_case("yes");
+        }
+    }
+    (url, enabled)
+}
+
+fn get_autoproxy(service: &str) -> Result<ServiceProxy> {
+    let out = stdout(NETWORKSETUP, &["-getautoproxyurl", service])?;
+    let (url, enabled) = parse_autoproxy(&out);
+    Ok(ServiceProxy {
+        service: service.to_string(),
+        url,
+        enabled,
+    })
+}
+
+/// Only http://loopback PAC URLs are ever written by AdBlock; refuse
+/// anything that could smuggle extra arguments or a remote script.
+fn valid_pac_url(url: &str) -> bool {
+    (url.starts_with("http://127.0.0.1:") || url.starts_with("http://[::1]:"))
+        && url.ends_with("/proxy.pac")
+        && url
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b':' | b'/' | b'.' | b'[' | b']'))
+}
+
+fn set_autoproxy(service: &str, url: Option<&str>, enabled: bool) -> Result<()> {
+    match url {
+        Some(u) => {
+            run(NETWORKSETUP, &["-setautoproxyurl", service, u])?;
+        }
+        // Best effort: clear a URL that we set. Older macOS versions reject
+        // an empty value, in which case the URL is left stored but disabled.
+        None => {
+            let _ = run(NETWORKSETUP, &["-setautoproxyurl", service, ""]);
+        }
+    }
+    run(
+        NETWORKSETUP,
+        &[
+            "-setautoproxystate",
+            service,
+            if enabled { "on" } else { "off" },
+        ],
+    )?;
+    Ok(())
 }
 
 fn set_dns(service: &str, servers: &[String]) -> Result<()> {
@@ -210,6 +269,80 @@ impl Platform for MacOs {
         }
     }
 
+    fn proxy_supported(&self) -> bool {
+        true
+    }
+
+    fn proxy_plan(&self, pac_url: &str) -> Result<ProxyBackup> {
+        if !valid_pac_url(pac_url) {
+            bail!("refusing to configure an unexpected PAC URL");
+        }
+        let mut services = Vec::new();
+        for service in network_services()? {
+            let mut current = get_autoproxy(&service)?;
+            // A stale AdBlock setting counts as "nothing was configured".
+            if current.url.as_deref() == Some(pac_url) {
+                current.url = None;
+                current.enabled = false;
+            }
+            services.push(current);
+        }
+        if services.is_empty() {
+            bail!("no network services found");
+        }
+        Ok(ProxyBackup { services })
+    }
+
+    fn proxy_apply(&self, plan: &ProxyBackup, pac_url: &str) -> Result<()> {
+        if !valid_pac_url(pac_url) {
+            bail!("refusing to configure an unexpected PAC URL");
+        }
+        for s in &plan.services {
+            set_autoproxy(&s.service, Some(pac_url), true)
+                .with_context(|| format!("cannot set the proxy for {}", s.service))?;
+        }
+        Ok(())
+    }
+
+    fn proxy_restore(&self, backup: &ProxyBackup) -> Result<()> {
+        let existing = network_services().unwrap_or_default();
+        let mut errors = Vec::new();
+        for s in &backup.services {
+            if !existing.contains(&s.service) {
+                continue; // service was removed meanwhile
+            }
+            if let Err(e) = set_autoproxy(&s.service, s.url.as_deref(), s.enabled) {
+                errors.push(format!("{}: {e}", s.service));
+            }
+        }
+        if !errors.is_empty() {
+            bail!(
+                "could not restore the proxy setting for: {}",
+                errors.join("; ")
+            );
+        }
+        Ok(())
+    }
+
+    fn proxy_config_state(&self, pac_url: &str) -> ProxyConfigState {
+        let Ok(services) = network_services() else {
+            return ProxyConfigState::Inactive("cannot list network services".into());
+        };
+        let missing: Vec<String> = services
+            .into_iter()
+            .filter(|s| {
+                !get_autoproxy(s)
+                    .map(|p| p.enabled && p.url.as_deref() == Some(pac_url))
+                    .unwrap_or(false)
+            })
+            .collect();
+        if missing.is_empty() {
+            ProxyConfigState::Active
+        } else {
+            ProxyConfigState::Inactive(format!("not configured for: {}", missing.join(", ")))
+        }
+    }
+
     fn firewall_rules(&self, plan: &FirewallPlan) -> Option<String> {
         Some(render_pf(plan))
     }
@@ -352,6 +485,36 @@ fn create_service_account() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn autoproxy_parsing() {
+        assert_eq!(
+            parse_autoproxy("URL: http://127.0.0.1:8118/proxy.pac\nEnabled: Yes\n"),
+            (Some("http://127.0.0.1:8118/proxy.pac".to_string()), true)
+        );
+        assert_eq!(parse_autoproxy("URL: (null)\nEnabled: No\n"), (None, false));
+        assert_eq!(
+            parse_autoproxy("URL: http://corp/proxy.pac\nEnabled: No\n"),
+            (Some("http://corp/proxy.pac".to_string()), false)
+        );
+    }
+
+    #[test]
+    fn pac_urls_are_restricted_to_loopback() {
+        assert!(valid_pac_url("http://127.0.0.1:8118/proxy.pac"));
+        assert!(valid_pac_url("http://[::1]:8118/proxy.pac"));
+        for bad in [
+            "http://evil.example/proxy.pac",
+            "https://127.0.0.1:8118/proxy.pac",
+            "http://127.0.0.1:8118/other.pac",
+            "http://127.0.0.1:8118/proxy.pac;rm",
+            "http://127.0.0.1:8118/proxy.pac -x",
+            "http://127.0.0.1.evil.example:8118/proxy.pac",
+            "-setautoproxyurl",
+        ] {
+            assert!(!valid_pac_url(bad), "{bad}");
+        }
+    }
 
     #[test]
     fn pf_token_parsing() {

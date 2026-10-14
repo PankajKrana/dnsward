@@ -72,6 +72,7 @@ adblock-stats.workspace = true
 sha2.workspace = true
 clap.workspace = true
 adblock-cli.workspace = true
+adblock-platform.workspace = true
 serde_json.workspace = true
 criterion.workspace = true
 
