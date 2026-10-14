@@ -76,22 +76,50 @@ a concrete, named list of apps where measurement shows a benefit.
 
 ## Phase 1: DNS bypass protection (option B)
 
-* Config `[system] enforce_dns = false` (default off). When enabled, `adblock
-  enable` installs a firewall anchor that:
-  * redirects outbound UDP/TCP port 53 from everyone except the daemon's
-    account to the daemon;
-  * rejects connections to a maintained list of public DoH/DoT addresses
-    (port 853 outright), so apps fall back to system DNS.
-* macOS: a `pf` anchor loaded with `pfctl`, referenced from a dedicated anchor
-  file, never by editing `/etc/pf.conf`. Linux: an `nftables` table owned by
-  AdBlock (`inet adblock`), with a skip rule keyed on the daemon's uid to
-  avoid redirect loops.
-* Same fail-safe rule as DNS settings: persist the undo information first,
-  verify resolution after applying, remove the rules on `stop`/`disable`, and
-  remove them automatically if the daemon is not answering.
-* Known limits, stated in the docs: DoH to a CDN hostname shared with real
-  content cannot be blocked by address; Encrypted Client Hello hides SNI from
-  anything that is not the endpoint.
+**Status: implemented** as `adblock enforce-dns on | off | status | show`
+(`crates/adblock-platform/src/firewall.rs`). Two decisions changed from the
+first draft of this section:
+
+* **Reject, don't redirect.** Redirecting traffic that the machine itself
+  originates is fragile in both `pf` and `nftables` (loops, state, ordering),
+  and a mistake there can leave the machine without DNS. Rejecting a few
+  destinations cannot loop, and an app whose hardcoded resolver is refused
+  simply falls back to the system resolver.
+* **Public destinations only.** Loopback, private, link-local and CGNAT ranges
+  are never touched, so the system resolver (which talks to AdBlock on
+  loopback), router DNS and VPN split-DNS keep working.
+
+What it does, for every account except the AdBlock service account (whose own
+upstream queries must pass):
+
+* refuse TCP/UDP port 53 and 853 to public addresses;
+* refuse port 443 (TCP and UDP, so QUIC too) to a fixed list of well-known
+  public DoH resolvers (Cloudflare, Google, Quad9, OpenDNS, AdGuard).
+
+Safety, mirroring the DNS-settings changes:
+
+* It is a **separate, explicit command**, not part of `enable`, because it
+  affects traffic beyond DNS.
+* It refuses to run unless system DNS is already routed through AdBlock;
+  otherwise rejecting resolvers would break name resolution.
+* The generated rules are validated first (`pfctl -n`, `nft -c`), the intent
+  is persisted before loading, and afterwards the system resolver is checked;
+  on failure the rules are removed again.
+* `stop`, `disable` and `uninstall` remove the rules *before* restoring the
+  original DNS settings, so those resolvers are never blocked by our own rules.
+  `start` re-applies them if the user had them on.
+* macOS: rules live in the `com.apple/250.AdBlock` pf anchor (the stock
+  `/etc/pf.conf` already evaluates `com.apple/*`), enabled with the
+  reference-counted `pfctl -E` so other tools that use pf are unaffected; the
+  main ruleset is never edited. Linux: a dedicated `inet adblock_enforce`
+  table; nothing else is touched.
+
+Known limits: the rules are **lost at reboot** (the safe direction; `enforce-dns
+status` reports it and re-running the command restores them). DoH on a
+hostname shared with real content cannot be blocked by address, and Encrypted
+Client Hello hides SNI from anything that is not the endpoint. Applying the
+rules has been tested only through rendering and parse-only validation (see
+below); it has not yet been exercised end-to-end on a live system.
 
 ## Phase 2: explicit forward proxy (option C)
 
@@ -222,7 +250,7 @@ which apps are affected and makes pinning failures look like random outages.
 
 ## Decision gates
 
-1. **After Phase 1:** measure how many real apps on a test machine used
+1. **After Phase 1 has run on real machines:** measure how many real apps on a test machine used
    hardcoded resolvers. If few, Phase 2's attribution value is the main
    remaining reason to continue.
 2. **After Phase 2:** build a list of concrete non-browser apps whose ads

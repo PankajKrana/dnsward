@@ -13,6 +13,7 @@
 //! state (including resolv.conf symlinks).
 
 use crate::cmd::{find_tool, run, stdout, succeeds};
+use crate::firewall::{FirewallPlan, FirewallState, NFT_TABLE, render_nft};
 use crate::{
     DnsBackup, DnsConfigState, LogSource, Platform, ResolvBackup, SERVICE_USER_LINUX, SYSTEMD_UNIT,
     ServiceStatus, render_resolv_conf, resolver_addresses,
@@ -26,6 +27,13 @@ const RESOLVED_DROPIN_DIR: &str = "/etc/systemd/resolved.conf.d";
 const RESOLVED_DROPIN: &str = "/etc/systemd/resolved.conf.d/90-adblock.conf";
 const NM_DROPIN_DIR: &str = "/etc/NetworkManager/conf.d";
 const NM_DROPIN: &str = "/etc/NetworkManager/conf.d/90-adblock.conf";
+
+const NFT_RULES_FILE: &str = "/etc/adblock/enforce-dns.nft";
+
+fn nft() -> Result<&'static str> {
+    find_tool(&["/usr/sbin/nft", "/sbin/nft", "/usr/bin/nft"])
+        .context("nft not found: DNS bypass protection needs nftables")
+}
 
 const UNIT_PATHS: &[&str] = &[
     "/etc/systemd/system/adblock.service",
@@ -280,6 +288,40 @@ impl Platform for Linux {
         } else {
             DnsConfigState::Inactive(format!("/etc/resolv.conf uses {}", servers.join(", ")))
         }
+    }
+
+    fn firewall_rules(&self, plan: &FirewallPlan) -> Option<String> {
+        Some(render_nft(plan))
+    }
+
+    fn firewall_apply(&self, plan: &FirewallPlan) -> Result<FirewallState> {
+        let nft = nft()?;
+        let file = Path::new(NFT_RULES_FILE);
+        if let Some(dir) = file.parent() {
+            adblock_config::fs::ensure_dir(dir, 0o755)?;
+        }
+        adblock_config::fs::write_atomic(file, render_nft(plan).as_bytes(), 0o644)
+            .context("cannot write the nftables rules file")?;
+        // Check-only pass first: nothing is loaded unless the rules are valid.
+        run(nft, &["-c", "-f", NFT_RULES_FILE]).context("nftables rejected the generated rules")?;
+        run(nft, &["-f", NFT_RULES_FILE]).context("could not load the AdBlock nftables table")?;
+        Ok(FirewallState::default())
+    }
+
+    fn firewall_remove(&self, _state: &FirewallState) -> Result<()> {
+        let nft = nft()?;
+        // Only our own table; a missing table means there is nothing to undo.
+        if succeeds(nft, &["list", "table", "inet", NFT_TABLE]) {
+            run(nft, &["delete", "table", "inet", NFT_TABLE])?;
+        }
+        let _ = std::fs::remove_file(NFT_RULES_FILE);
+        Ok(())
+    }
+
+    fn firewall_active(&self) -> bool {
+        nft()
+            .map(|n| succeeds(n, &["list", "table", "inet", NFT_TABLE]))
+            .unwrap_or(false)
     }
 
     fn flush_dns_cache(&self) {

@@ -6,6 +6,7 @@
 //! root, so the LaunchDaemon still runs as the unprivileged `_adblock` user.
 
 use crate::cmd::{run, stdout, succeeds};
+use crate::firewall::{FirewallPlan, FirewallState, PF_ANCHOR, render_pf};
 use crate::{
     DnsBackup, DnsConfigState, LAUNCHD_LABEL, LogSource, Platform, SERVICE_USER_MACOS,
     ServiceStatus, resolver_addresses,
@@ -17,6 +18,8 @@ use std::path::{Path, PathBuf};
 const LAUNCHCTL: &str = "/bin/launchctl";
 const NETWORKSETUP: &str = "/usr/sbin/networksetup";
 const PLIST: &str = "/Library/LaunchDaemons/com.adblock.daemon.plist";
+const PFCTL: &str = "/sbin/pfctl";
+const PF_RULES_FILE: &str = "/Library/Application Support/AdBlock/enforce-dns.pf";
 
 #[derive(Debug, Default)]
 pub struct MacOs;
@@ -64,6 +67,14 @@ fn set_dns(service: &str, servers: &[String]) -> Result<()> {
     }
     run(NETWORKSETUP, &args)?;
     Ok(())
+}
+
+/// Extracts the reference token from `pfctl -E` output ("Token : 123").
+fn parse_pf_token(out: &str) -> Option<String> {
+    out.lines()
+        .find_map(|l| l.trim().strip_prefix("Token :"))
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty() && t.bytes().all(|b| b.is_ascii_digit()))
 }
 
 impl Platform for MacOs {
@@ -199,6 +210,50 @@ impl Platform for MacOs {
         }
     }
 
+    fn firewall_rules(&self, plan: &FirewallPlan) -> Option<String> {
+        Some(render_pf(plan))
+    }
+
+    fn firewall_apply(&self, plan: &FirewallPlan) -> Result<FirewallState> {
+        let file = Path::new(PF_RULES_FILE);
+        if let Some(dir) = file.parent() {
+            adblock_config::fs::ensure_dir(dir, 0o755)?;
+        }
+        adblock_config::fs::write_atomic(file, render_pf(plan).as_bytes(), 0o644)
+            .context("cannot write the pf rules file")?;
+        // Parse-only check first: nothing is loaded unless the rules are valid.
+        run(PFCTL, &["-n", "-a", PF_ANCHOR, "-f", PF_RULES_FILE])
+            .context("pf rejected the generated rules")?;
+        run(PFCTL, &["-a", PF_ANCHOR, "-f", PF_RULES_FILE])
+            .context("could not load the AdBlock pf anchor")?;
+        // Reference-counted enable: other tools that enabled pf keep it on.
+        let out = run(PFCTL, &["-E"]).context("could not enable pf")?;
+        let text = format!(
+            "{}\n{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        Ok(FirewallState {
+            pf_token: parse_pf_token(&text),
+        })
+    }
+
+    fn firewall_remove(&self, state: &FirewallState) -> Result<()> {
+        // Flush only our anchor; never the main ruleset.
+        let flushed = run(PFCTL, &["-a", PF_ANCHOR, "-F", "all"]);
+        if let Some(token) = &state.pf_token {
+            let _ = run(PFCTL, &["-X", token]);
+        }
+        let _ = std::fs::remove_file(PF_RULES_FILE);
+        flushed.map(|_| ())
+    }
+
+    fn firewall_active(&self) -> bool {
+        stdout(PFCTL, &["-a", PF_ANCHOR, "-sr"])
+            .map(|o| o.contains("adblock_doh4"))
+            .unwrap_or(false)
+    }
+
     fn flush_dns_cache(&self) {
         let _ = run("/usr/bin/dscacheutil", &["-flushcache"]);
         let _ = run("/usr/bin/killall", &["-HUP", "mDNSResponder"]);
@@ -297,6 +352,16 @@ fn create_service_account() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pf_token_parsing() {
+        assert_eq!(
+            parse_pf_token("pf enabled\nToken : 14735192827\n").as_deref(),
+            Some("14735192827")
+        );
+        assert_eq!(parse_pf_token("pf already enabled"), None);
+        assert_eq!(parse_pf_token("Token : abc; rm -rf /"), None);
+    }
 
     #[test]
     fn parsing() {

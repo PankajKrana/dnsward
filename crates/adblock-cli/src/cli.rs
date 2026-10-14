@@ -49,6 +49,8 @@ pub enum Command {
     Stop,
     /// Restart the service (applies configuration changes).
     Restart,
+    /// Stop apps from bypassing system DNS (hardcoded resolvers, DNS-over-HTTPS).
+    EnforceDns(EnforceDnsArgs),
     /// Temporarily stop filtering without changing system settings.
     Pause,
     /// Resume filtering after `pause`.
@@ -93,6 +95,25 @@ pub enum Command {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
+}
+
+#[derive(Debug, Args)]
+pub struct EnforceDnsArgs {
+    #[command(subcommand)]
+    pub action: EnforceDnsAction,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum EnforceDnsAction {
+    /// Load firewall rules that refuse plain DNS, DNS-over-TLS and well-known
+    /// DNS-over-HTTPS servers for every account except AdBlock's.
+    On,
+    /// Remove those rules.
+    Off,
+    /// Show whether the rules are loaded.
+    Status,
+    /// Print the rules that `on` would load, without loading anything.
+    Show,
 }
 
 #[derive(Debug, Args)]

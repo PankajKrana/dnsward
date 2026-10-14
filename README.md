@@ -102,6 +102,7 @@ For in-page and YouTube ad blocking, also install the
 |---|---|
 | `adblock status` | Protection status (exit code 3 if the service is not running) |
 | `sudo adblock enable` / `disable` | Turn protection on/off (service at boot + system DNS) |
+| `sudo adblock enforce-dns on` / `off` / `status`, `adblock enforce-dns show` | Optional: refuse public resolvers for apps that skip system DNS (see [docs/proxy-design.md](docs/proxy-design.md)) |
 | `sudo adblock start` / `stop` / `restart` | Control the service. `stop` restores system DNS while stopped |
 | `sudo adblock pause` / `resume` | Temporarily stop filtering without touching system settings |
 | `sudo adblock update [--force]` | Download filter-list updates now |

@@ -10,12 +10,14 @@
 
 pub mod browser;
 pub mod cmd;
+pub mod firewall;
 #[cfg(target_os = "linux")]
 pub mod linux;
 #[cfg(target_os = "macos")]
 pub mod macos;
 
 use anyhow::{Context, Result};
+pub use firewall::{FirewallPlan, FirewallState};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -67,6 +69,14 @@ pub struct SystemState {
     /// The user ran `enable` (and not `disable`).
     pub enabled: bool,
     pub dns: Option<DnsBackup>,
+    /// The rules are currently loaded (`adblock enforce-dns on`). Cleared
+    /// while the service is stopped, so the rules never outlive the resolver
+    /// they depend on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub firewall: Option<FirewallState>,
+    /// The user wants DNS bypass protection; `start` re-applies it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub enforce_dns: bool,
 }
 
 impl SystemState {
@@ -127,6 +137,26 @@ pub trait Platform {
     /// Static inspection of the configuration (complements the live probe).
     fn dns_config_state(&self, listen: &[SocketAddr]) -> DnsConfigState;
     fn flush_dns_cache(&self) {}
+
+    /// The firewall rules that would be loaded, for `enforce-dns show`.
+    /// `None` where DNS bypass protection is unsupported.
+    fn firewall_rules(&self, _plan: &FirewallPlan) -> Option<String> {
+        None
+    }
+    /// Loads the DNS bypass rules (see [`firewall`]). Must not change
+    /// anything unless the rules validate first.
+    fn firewall_apply(&self, _plan: &FirewallPlan) -> Result<FirewallState> {
+        anyhow::bail!("DNS bypass protection is not supported on this platform")
+    }
+    /// Removes exactly what [`Platform::firewall_apply`] loaded. Succeeds if
+    /// nothing is loaded.
+    fn firewall_remove(&self, _state: &FirewallState) -> Result<()> {
+        Ok(())
+    }
+    /// Whether the rules are currently loaded (needs root).
+    fn firewall_active(&self) -> bool {
+        false
+    }
 
     fn log_source(&self, paths: &adblock_config::Paths, follow: bool, lines: usize) -> LogSource;
 
@@ -270,6 +300,10 @@ mod tests {
                     ("Ethernet".into(), vec!["1.1.1.1".into()]),
                 ],
             }),
+            firewall: Some(FirewallState {
+                pf_token: Some("42".into()),
+            }),
+            enforce_dns: true,
         };
         state.save(&path).unwrap();
         assert_eq!(SystemState::load(&path).unwrap(), state);
@@ -282,6 +316,14 @@ mod tests {
             SystemState::load(&dir.path().join("missing")).unwrap(),
             SystemState::default()
         );
+    }
+
+    #[test]
+    fn old_state_files_without_firewall_still_load() {
+        let state: SystemState = serde_json::from_str(r#"{"enabled": true, "dns": null}"#).unwrap();
+        assert!(state.enabled);
+        assert_eq!(state.firewall, None);
+        assert!(!state.enforce_dns);
     }
 
     #[test]

@@ -7,10 +7,11 @@
 //! * The system resolver is only pointed at AdBlock while the service is
 //!   running (`stop` restores DNS; `start` re-applies it).
 
+use crate::cli::EnforceDnsAction;
 use crate::context::{Ctx, system_dns_routing, system_resolution_works};
 use crate::output::DnsRouting;
 use adblock_core::protocol::{Request, Response};
-use adblock_platform::{Platform, ServiceStatus, SystemState, browser};
+use adblock_platform::{FirewallPlan, Platform, ServiceStatus, SystemState, browser};
 use anyhow::{Context, Result, bail};
 use std::io::Write;
 use std::net::SocketAddr;
@@ -148,6 +149,156 @@ fn restore_dns(ctx: &Ctx, platform: &dyn Platform, state: &mut SystemState) -> R
     Ok(())
 }
 
+/// Removes the DNS bypass rules if they were loaded. Always done *before*
+/// DNS settings are restored or the service stops, so the original resolvers
+/// are never blocked by our own rules.
+fn remove_firewall(ctx: &Ctx, platform: &dyn Platform, state: &mut SystemState) -> Result<()> {
+    if let Some(fw) = state.firewall.clone() {
+        platform.firewall_remove(&fw)?;
+        state.firewall = None;
+        state.save(&ctx.paths.system_state_file())?;
+        step(ctx, "DNS bypass protection removed");
+    }
+    Ok(())
+}
+
+fn service_uid() -> Option<u32> {
+    let name = if cfg!(target_os = "macos") {
+        adblock_platform::SERVICE_USER_MACOS
+    } else {
+        adblock_platform::SERVICE_USER_LINUX
+    };
+    adblock_platform::user_ids(name).map(|(uid, _)| uid)
+}
+
+/// Loads the bypass rules, verifying that name resolution still works and
+/// rolling back otherwise.
+async fn apply_firewall(
+    ctx: &Ctx,
+    platform: &dyn Platform,
+    state: &mut SystemState,
+    plan: &FirewallPlan,
+) -> Result<()> {
+    let state_file = ctx.paths.system_state_file();
+    // Persist first: if anything below fails half-way, `off`, `stop` and
+    // `uninstall` still know there may be rules to remove.
+    state.firewall = Some(adblock_platform::FirewallState::default());
+    state.save(&state_file)?;
+    let loaded = match platform.firewall_apply(plan) {
+        Ok(loaded) => loaded,
+        Err(e) => {
+            let _ = platform.firewall_remove(&Default::default());
+            state.firewall = None;
+            state.save(&state_file)?;
+            return Err(e.context("DNS bypass protection was not enabled"));
+        }
+    };
+    state.firewall = Some(loaded.clone());
+    state.save(&state_file)?;
+
+    if !platform.firewall_active() || !system_resolution_works().await {
+        let _ = platform.firewall_remove(&loaded);
+        state.firewall = None;
+        state.save(&state_file)?;
+        bail!(
+            "name resolution stopped working (or the rules did not load) after enabling DNS              bypass protection, so it was removed again. Run `adblock doctor`."
+        );
+    }
+    step(ctx, "DNS bypass protection is on");
+    Ok(())
+}
+
+pub async fn enforce_dns(ctx: &Ctx, action: &EnforceDnsAction) -> Result<()> {
+    let platform = adblock_platform::current();
+    match action {
+        EnforceDnsAction::Show => {
+            // A placeholder uid is fine here: nothing is loaded.
+            let uid = service_uid().unwrap_or_else(|| {
+                eprintln!("note: the AdBlock service account is not installed yet; showing uid 0");
+                0
+            });
+            let rules = platform
+                .firewall_rules(&FirewallPlan { daemon_uid: uid })
+                .context("DNS bypass protection is not supported on this platform")?;
+            print!("{rules}");
+            Ok(())
+        }
+        EnforceDnsAction::Status => {
+            require_root("enforce-dns status")?;
+            let state = SystemState::load(&ctx.paths.system_state_file())?;
+            let recorded = state.firewall.is_some();
+            let active = platform.firewall_active();
+            if ctx.json {
+                println!(
+                    "{}",
+                    serde_json::json!({ "recorded": recorded, "active": active })
+                );
+            } else if active {
+                println!("DNS bypass protection: on");
+            } else if recorded {
+                println!(
+                    "DNS bypass protection: recorded as on, but the rules are not loaded \
+                     (they are lost at reboot). Re-apply with: sudo adblock enforce-dns on"
+                );
+            } else {
+                println!("DNS bypass protection: off");
+            }
+            Ok(())
+        }
+        EnforceDnsAction::Off => {
+            require_root("enforce-dns off")?;
+            let mut state = SystemState::load(&ctx.paths.system_state_file())?;
+            if state.firewall.is_none() && !platform.firewall_active() {
+                if state.enforce_dns {
+                    state.enforce_dns = false;
+                    state.save(&ctx.paths.system_state_file())?;
+                }
+                println!("DNS bypass protection is already off.");
+                return Ok(());
+            }
+            let fw = state.firewall.clone().unwrap_or_default();
+            platform.firewall_remove(&fw)?;
+            state.firewall = None;
+            state.enforce_dns = false;
+            state.save(&ctx.paths.system_state_file())?;
+            step(ctx, "DNS bypass protection removed");
+            Ok(())
+        }
+        EnforceDnsAction::On => {
+            require_root("enforce-dns on")?;
+            let mut state = SystemState::load(&ctx.paths.system_state_file())?;
+            let Some(uid) = service_uid() else {
+                bail!(
+                    "the AdBlock service account does not exist; run `sudo adblock enable` first"
+                );
+            };
+            // Refusing resolvers is only safe while the system resolver goes
+            // through AdBlock; otherwise the machine would lose DNS.
+            if !state.enabled || system_dns_routing().await != DnsRouting::Active {
+                bail!(
+                    "system DNS is not routed through AdBlock, so refusing other resolvers would \
+                     break name resolution. Run `sudo adblock enable` and check `adblock doctor` first."
+                );
+            }
+            apply_firewall(
+                ctx,
+                platform.as_ref(),
+                &mut state,
+                &FirewallPlan { daemon_uid: uid },
+            )
+            .await?;
+            if !ctx.json {
+                println!(
+                    "\nApps can no longer reach public DNS servers directly; they fall back to the \
+                     system resolver.\nThe rules do not survive a reboot. Re-run this command (or \
+                     `sudo adblock start`) afterwards.\nRemove them with: sudo adblock enforce-dns off"
+                );
+            }
+            Ok(())
+        }
+    }
+}
+
 pub async fn enable(ctx: &Ctx) -> Result<()> {
     require_root("enable")?;
     let config = ctx
@@ -208,10 +359,12 @@ pub async fn disable(ctx: &Ctx) -> Result<()> {
     let platform = adblock_platform::current();
     let state_file = ctx.paths.system_state_file();
     let mut state = SystemState::load(&state_file)?;
+    remove_firewall(ctx, platform.as_ref(), &mut state)?;
     restore_dns(ctx, platform.as_ref(), &mut state)?;
     platform.service_stop()?;
     step(ctx, "Service stopped (and disabled at boot)");
     state.enabled = false;
+    state.enforce_dns = false;
     state.save(&state_file)?;
     if !ctx.json {
         println!("\nAdBlock is off. Turn it back on with: sudo adblock enable");
@@ -230,6 +383,23 @@ pub async fn start(ctx: &Ctx) -> Result<()> {
     step(ctx, "Service started");
     if state.enabled && !listen.is_empty() {
         apply_dns(ctx, platform.as_ref(), &mut state, &listen).await?;
+        // `stop` removed the bypass rules; bring them back if they were on.
+        if state.enforce_dns
+            && state.firewall.is_none()
+            && let Some(uid) = service_uid()
+            && let Err(e) = apply_firewall(
+                ctx,
+                platform.as_ref(),
+                &mut state,
+                &FirewallPlan { daemon_uid: uid },
+            )
+            .await
+        {
+            eprintln!(
+                "{} DNS bypass protection could not be re-applied: {e:#}",
+                ctx.style.yellow("!")
+            );
+        }
     } else if !state.enabled && !ctx.json {
         println!(
             "  System DNS is unchanged. Run `sudo adblock enable` to route it through AdBlock."
@@ -242,7 +412,9 @@ pub async fn stop(ctx: &Ctx) -> Result<()> {
     require_root("stop")?;
     let platform = adblock_platform::current();
     let mut state = SystemState::load(&ctx.paths.system_state_file())?;
-    // Never leave the system pointing at a resolver that is not running.
+    // Never leave the system pointing at a resolver that is not running, or
+    // blocking the resolvers it is about to go back to.
+    remove_firewall(ctx, platform.as_ref(), &mut state)?;
     restore_dns(ctx, platform.as_ref(), &mut state)?;
     platform.service_stop()?;
     step(ctx, "Service stopped");
@@ -294,6 +466,12 @@ pub async fn uninstall(ctx: &Ctx, yes: bool, purge: bool) -> Result<()> {
     // anything that is deleted recursively.
     let system = adblock_config::Paths::system();
     let mut state = SystemState::load(&system.system_state_file()).unwrap_or_default();
+    if let Err(e) = remove_firewall(ctx, platform.as_ref(), &mut state) {
+        eprintln!(
+            "{} could not remove the DNS bypass rules automatically: {e:#}",
+            ctx.style.red("✗")
+        );
+    }
     if let Err(e) = restore_dns(ctx, platform.as_ref(), &mut state) {
         eprintln!(
             "{} could not restore DNS automatically: {e:#}",

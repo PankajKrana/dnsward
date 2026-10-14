@@ -142,6 +142,7 @@ async fn dispatch(cli: Cli, ctx: Ctx) -> anyhow::Result<ExitCode> {
         Command::Start => done(system::start(&ctx).await),
         Command::Stop => done(system::stop(&ctx).await),
         Command::Restart => done(system::restart(&ctx).await),
+        Command::EnforceDns(a) => done(system::enforce_dns(&ctx, &a.action).await),
         Command::Pause => {
             done(commands::simple(&ctx, Request::SetEnabled { enabled: false }).await)
         }
