@@ -1,6 +1,6 @@
 # Maintainer: AdBlock maintainers <maintainers@example.com>
 pkgname=adblock
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=1
 pkgdesc="System-wide ad and tracker blocking (filtering DNS resolver + browser extensions)"
 arch=('x86_64' 'aarch64')

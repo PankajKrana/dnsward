@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "adblock-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "adblock-config",
  "adblock-core",
@@ -25,7 +25,7 @@ dependencies = [
 
 [[package]]
 name = "adblock-config"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "adblock-filter",
  "libc",
@@ -37,7 +37,7 @@ dependencies = [
 
 [[package]]
 name = "adblock-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "adblock-config",
  "adblock-dns",
@@ -58,7 +58,7 @@ dependencies = [
 
 [[package]]
 name = "adblock-dns"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "adblock-config",
  "adblock-filter",
@@ -72,7 +72,7 @@ dependencies = [
 
 [[package]]
 name = "adblock-filter"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "regex",
  "serde",
@@ -82,7 +82,7 @@ dependencies = [
 
 [[package]]
 name = "adblock-platform"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "adblock-config",
  "anyhow",
@@ -95,7 +95,7 @@ dependencies = [
 
 [[package]]
 name = "adblock-proxy"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "adblock-filter",
  "adblock-stats",
@@ -106,7 +106,7 @@ dependencies = [
 
 [[package]]
 name = "adblock-stats"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "adblock-config",
  "adblock-filter",
@@ -118,7 +118,7 @@ dependencies = [
 
 [[package]]
 name = "adblock-tests"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "adblock-cli",
  "adblock-config",
