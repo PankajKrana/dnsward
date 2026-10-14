@@ -39,6 +39,27 @@ jobs:
       - name: Shell scripts
         run: for f in installers/*.sh packaging/*.sh packaging/deb/*.sh browser/build.sh; do sh -n "$f"; done
 
+  packages:
+    name: build .deb and .rpm
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --locked -p adblock-cli
+      - name: Archive
+        run: packaging/make-dist.sh x86_64-unknown-linux-gnu target/release/adblock dist
+      - name: Debian package
+        run: packaging/deb/build-deb.sh target/release/adblock 0.0.0-ci amd64 dist
+      - name: RPM package
+        run: |
+          sudo apt-get update && sudo apt-get install -y rpm
+          rpmbuild -bb packaging/rpm/adblock.spec --define "_version 0.0.0" \
+            --define "_srcroot $PWD" --define "_bin $PWD/target/release/adblock" \
+            --define "_rpmdir $PWD/dist"
+          rpm -qpl dist/*/adblock-*.rpm
+          rpm -qp --scripts dist/*/adblock-*.rpm | grep -q systemctl
+
   shellcheck:
     runs-on: ubuntu-24.04
     steps:
