@@ -87,6 +87,8 @@ shellcheck -s sh installers/*.sh                    # if you touched shell scrip
 
 ## Commits and pull requests
 
+- `main` is protected: all changes arrive through a pull request and need the
+  **CI passed** check; direct pushes are rejected.
 - Branch from `main`; name it for the change (`fix-resolver-cache`,
   `feat-proxy-status`).
 - Commit messages: imperative mood, a short summary line, details in the body.
@@ -119,8 +121,9 @@ native-messaging JSON), or changes installers and packaging, also:
 1. Update the version in `Cargo.toml` (`[workspace.package]`), both
    `browser/*/manifest.json` files and `packaging/arch/PKGBUILD`; refresh
    `Cargo.lock`.
-2. Make sure CI is green on `main`.
-3. Tag and push: `git tag -a vX.Y.Z -m "FuckAds X.Y.Z" && git push origin vX.Y.Z`.
+2. Merge that change to `main` through a pull request and wait for **CI
+   passed** on the merge commit.
+3. Tag that merge commit and push the tag: `git tag -a vX.Y.Z -m "FuckAds X.Y.Z" && git push origin vX.Y.Z`.
    The release workflow checks that the tag matches the code version, builds
    and tests every target, attests the artifacts, and publishes the release.
 

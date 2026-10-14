@@ -97,24 +97,35 @@ weekly for Cargo, `fuzz/` and the actions themselves.
 |---|---|---|
 | `ci.yml` | every push to `main`, every pull request, weekly | formatting and docs; clippy + tests on Linux x86-64/arm64 and macOS 14/15; build on the minimum Rust (1.88); browser tests; shell scripts and shellcheck; `.deb`/`.rpm` builds; a real install, enable, root-drop and uninstall on a systemd host; fuzzing (2 min per target, 10 on the weekly run); RustSec advisories; license/ban/source policy (`deny.toml`); dependency review on pull requests. **`CI passed`** summarises all of it. |
 | `codeql.yml` | `main`, pull requests, weekly | CodeQL analysis for Rust and JavaScript |
-| `release.yml` | a `v*` tag (or run by hand as a dry run) | checks the tag against the code version, builds and tests four targets, builds packages and the extension zips, signs build-provenance attestations, publishes the release with generated notes, then bumps the Homebrew tap |
+| `release.yml` | a `v*` tag (or run by hand as a dry run) | checks that the tag is on `main`, `CI passed` succeeded there and the tag matches the code version, builds and tests four targets, builds packages and the extension zips, signs build-provenance attestations, publishes the release with generated notes, then bumps the Homebrew tap |
 
 Pull requests from the same branch cancel their previous run; runs on `main`
 always finish. Every job has a timeout and read-only permissions unless it
 needs more (the release job needs to write the release and the attestation).
 
-### Recommended repository settings
+### Branch protection and settings
 
-These are settings in GitHub, not files, so they have to be switched on once:
+`main` is protected (classic branch protection):
 
-- **Branch protection on `main`:** require a pull request, require the
-  **`CI passed`** check, require review from Code Owners, block force pushes.
-- **Security:** enable secret scanning with push protection, Dependabot
-  security updates, and private vulnerability reporting.
-- **Release secret:** add a repository secret `TAP_GITHUB_TOKEN` (a
-  fine-grained token with *Contents: write* on the `homebrew-tap` repository)
-  to let the release workflow update the Homebrew formula. Without it that job
-  only prints a notice.
+- changes go through a **pull request**; direct pushes are rejected, for
+  administrators too;
+- the **`CI passed`** check must pass (it summarises every CI job);
+- **linear history** (squash-merge), no force pushes, no branch deletion;
+- review conversations must be resolved before merging. No approving review
+  is required, because the repository has a single maintainer who cannot
+  approve their own pull request; raise `required_approving_review_count` (and
+  turn on "Require review from Code Owners") when there are more maintainers.
+
+The release workflow adds its own guard: a `v*` tag must point at a commit that
+is on `main` and whose `CI passed` check succeeded, and the version in the code
+must match the tag.
+
+Still to switch on in GitHub (Settings → Code security) if they are not yet:
+secret scanning with push protection, Dependabot security updates, and private
+vulnerability reporting. To let the release workflow update the Homebrew
+formula, add a repository secret `TAP_GITHUB_TOKEN` (a fine-grained token with
+*Contents: write* on the `homebrew-tap` repository). Without it that job only
+prints a notice.
 
 ## Releasing
 

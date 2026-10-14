@@ -20,12 +20,32 @@ env:
 
 jobs:
   verify:
-    name: tag matches the code
+    name: tag is on main, CI is green, version matches
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    permissions:
+      contents: read
+      checks: read           # read the "CI passed" result of the tagged commit
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
+        with:
+          fetch-depth: 0      # the whole history, to see whether the tag is on main
+          persist-credentials: false
+      - name: The tagged commit is on main and passed CI
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME ($GITHUB_SHA) is not on main. Merge it into main first, then tag the merge commit."
+            exit 1
+          fi
+          RESULT="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?per_page=100" \
+            --jq '[.check_runs[] | select(.name == "CI passed")] | sort_by(.started_at) | last | .conclusion // "missing"')"
+          if [ "$RESULT" != "success" ]; then
+            echo "::error::The 'CI passed' check is '$RESULT' on $GITHUB_SHA. Wait for green CI on main before tagging."
+            exit 1
+          fi
       - name: Compare the tag with the version in the code
         if: startsWith(github.ref, 'refs/tags/')
         env:
