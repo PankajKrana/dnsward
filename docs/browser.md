@@ -56,3 +56,6 @@ Filtering inside HTTPS from outside the browser requires a man-in-the-middle
 proxy and a custom root certificate. That weakens the security of every TLS
 connection on the machine, so AdBlock deliberately does not do it. Browser
 APIs give the same filtering power safely.
+
+A proposal for what could be done for non-browser apps, and under what
+conditions, is in [proxy-design.md](proxy-design.md). It is not implemented.
