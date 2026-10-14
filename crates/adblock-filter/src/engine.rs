@@ -339,6 +339,12 @@ impl EngineBuilder {
                 engine.cosmetic_exceptions.push(filter);
                 continue;
             }
+            if filter.removeparam.is_some() {
+                // Rewrites URLs instead of blocking them; never enters the
+                // blocking indexes or the DNS layer.
+                engine.param_filters.push((filter, list));
+                continue;
+            }
             if let Some(host) = filter.whole_hostname() {
                 let host: Box<str> = host.into();
                 // Filters naming `$document`/`$all` also carry URL-level
@@ -413,6 +419,7 @@ pub struct Engine {
     allowed_hosts: HashSet<Box<str>>,
     important_allowed_hosts: HashSet<Box<str>>,
     host_globs: Vec<HostGlob>,
+    param_filters: Vec<(NetworkFilter, ListIndex)>,
 
     block: UrlIndex,
     important: UrlIndex,
@@ -834,6 +841,47 @@ impl Engine {
         self.blocked_hosts.keys().map(|k| &**k)
     }
 
+    pub(crate) fn param_filters(&self) -> impl Iterator<Item = &NetworkFilter> {
+        self.param_filters.iter().map(|(f, _)| f)
+    }
+
+    /// Applies `$removeparam` filters. Returns the cleaned URL, or `None` if
+    /// no parameter was removed.
+    pub fn strip_params(&self, req: &Request) -> Option<String> {
+        let names: Vec<&str> = self
+            .param_filters
+            .iter()
+            .filter(|(f, _)| f.matches(req))
+            .filter_map(|(f, _)| f.removeparam.as_deref())
+            .collect();
+        if names.is_empty() {
+            return None;
+        }
+        let url = req.url.as_str();
+        let (rest, fragment) = match url.split_once('#') {
+            Some((r, f)) => (r, Some(f)),
+            None => (url, None),
+        };
+        let (base, query) = rest.split_once('?')?;
+        let kept: Vec<&str> = query
+            .split('&')
+            .filter(|p| !p.is_empty() && !names.contains(&p.split('=').next().unwrap_or("")))
+            .collect();
+        if kept.len() == query.split('&').filter(|p| !p.is_empty()).count() {
+            return None;
+        }
+        let mut out = base.to_string();
+        if !kept.is_empty() {
+            out.push('?');
+            out.push_str(&kept.join("&"));
+        }
+        if let Some(f) = fragment {
+            out.push('#');
+            out.push_str(f);
+        }
+        Some(out)
+    }
+
     pub(crate) fn important_host_list(&self) -> impl Iterator<Item = &str> {
         self.important_hosts.keys().map(|k| &**k)
     }
@@ -1007,6 +1055,36 @@ m.youtube.com#@#+js(json-prune, adPlacements)
         );
         assert!(e.scriptlets_for("m.youtube.com").is_empty());
         assert!(e.scriptlets_for("example.com").is_empty());
+    }
+
+    #[test]
+    fn strips_params() {
+        let mut b = EngineBuilder::new();
+        b.add_list(
+            "t",
+            Category::Trackers,
+            "$removeparam=utm_source\n||x.example^$removeparam=fbclid\n",
+            ListFormat::Auto,
+        );
+        let e = b.build();
+        let req = |u: &str| Request::new(u, None, ResourceType::Document).unwrap();
+        assert_eq!(
+            e.strip_params(&req("https://a.example/p?utm_source=n&id=1#top"))
+                .as_deref(),
+            Some("https://a.example/p?id=1#top")
+        );
+        assert_eq!(
+            e.strip_params(&req("https://x.example/p?fbclid=1&utm_source=2"))
+                .as_deref(),
+            Some("https://x.example/p")
+        );
+        assert_eq!(e.strip_params(&req("https://a.example/p?fbclid=1")), None);
+        assert_eq!(e.strip_params(&req("https://a.example/p")), None);
+        // Not a blocking rule.
+        assert!(
+            !e.check_request(&req("https://x.example/p?fbclid=1"))
+                .is_blocked()
+        );
     }
 
     #[test]

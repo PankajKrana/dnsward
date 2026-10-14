@@ -89,3 +89,10 @@
 ||appsflyer.com^
 ||adjust.com^
 ||kochava.com^
+
+! Tracking parameters stripped from URLs (browser extension only)
+$removeparam=fbclid
+$removeparam=gclid
+$removeparam=msclkid
+$removeparam=mc_eid
+$removeparam=igshid

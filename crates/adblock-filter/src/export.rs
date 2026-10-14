@@ -16,12 +16,14 @@ use serde_json::{Value, json};
 
 /// Priorities: higher wins in DNR.
 mod priority {
-    pub const BLOCK: u32 = 1;
-    pub const ALLOW: u32 = 2;
-    pub const IMPORTANT_BLOCK: u32 = 3;
-    pub const IMPORTANT_ALLOW: u32 = 4;
-    pub const USER_BLOCK: u32 = 5;
-    pub const USER_ALLOW: u32 = 6;
+    /// Query-parameter stripping yields to every blocking and allow rule.
+    pub const REMOVE_PARAM: u32 = 1;
+    pub const BLOCK: u32 = 2;
+    pub const ALLOW: u32 = 3;
+    pub const IMPORTANT_BLOCK: u32 = 4;
+    pub const IMPORTANT_ALLOW: u32 = 5;
+    pub const USER_BLOCK: u32 = 6;
+    pub const USER_ALLOW: u32 = 7;
 }
 
 /// Hostnames per `requestDomains` rule.
@@ -214,6 +216,23 @@ pub fn dnr_rules(engine: &Engine, user: &UserOverrides<'_>, max_rules: usize) ->
     for f in deferred_blocks {
         if let Some(cond) = network_condition(f, f.types)
             && !sink.push(priority::BLOCK, block.clone(), cond)
+        {
+            break;
+        }
+    }
+    for f in engine.param_filters() {
+        let Some(name) = f.removeparam.as_deref() else {
+            continue;
+        };
+        if let Some(cond) = network_condition(f, f.types)
+            && !sink.push(
+                priority::REMOVE_PARAM,
+                json!({
+                    "type": "redirect",
+                    "redirect": { "transform": { "queryTransform": { "removeParams": [name] } } }
+                }),
+                cond,
+            )
         {
             break;
         }
@@ -433,6 +452,27 @@ mod tests {
             assert_eq!(r["id"], i + 1);
         }
         assert!(dnr_rules(&engine, &UserOverrides::default(), 2).len() <= 2);
+    }
+
+    #[test]
+    fn dnr_removeparam() {
+        let engine = Engine::from_rules("$removeparam=utm_source\n||ads.example^\n");
+        let rules = dnr_rules(&engine, &UserOverrides::default(), 100);
+        let rule = rules
+            .iter()
+            .find(|r| r["action"]["type"] == "redirect")
+            .expect("redirect rule");
+        assert_eq!(
+            rule["action"]["redirect"]["transform"]["queryTransform"]["removeParams"][0],
+            "utm_source"
+        );
+        assert_eq!(rule["priority"], priority::REMOVE_PARAM);
+        assert!(rule["condition"].get("urlFilter").is_none());
+        assert!(
+            safari_content_blocker(&engine, &UserOverrides::default(), 1000)
+                .iter()
+                .all(|r| !r.to_string().contains("utm_source"))
+        );
     }
 
     #[test]

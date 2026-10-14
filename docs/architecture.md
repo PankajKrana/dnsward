@@ -54,6 +54,13 @@ and swap the Unix socket for a named pipe in `adblock-core::control`.
   (`$document`) exception > exception > block. User allow/block lists sit
   above all filter lists. Hosts AdBlock needs to function (DoH upstreams,
   list servers) are never blocked.
+* **Query-parameter stripping.** `$removeparam=name` filters (literal names
+  only; regex and exception forms are skipped) never block and never reach
+  the DNS layer. `Engine::strip_params` applies them to a request URL, and
+  the DNR export emits them as lowest-priority `redirect` rules with a
+  `queryTransform`, so they only run when nothing blocks or allows the
+  request. Safari's content blocker cannot rewrite URLs, so they are
+  not exported there.
 * **Export.** Rules are converted to Chromium/Firefox `declarativeNetRequest`
   rules. Plain hostnames are packed into `requestDomains` rules, so tens of
   thousands of hostnames take only a few dozen of the 30,000 available

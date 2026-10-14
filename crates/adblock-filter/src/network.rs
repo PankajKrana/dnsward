@@ -60,6 +60,9 @@ pub struct NetworkFilter {
     pub domains: Option<Box<DomainConstraint>>,
     pub cosmetic: CosmeticExceptions,
     pub badfilter: bool,
+    /// `$removeparam=name`: instead of blocking, strip this query parameter
+    /// from matching requests.
+    pub removeparam: Option<Box<str>>,
 }
 
 /// Size limit for compiled regex filters; keeps hostile lists from consuming
@@ -94,6 +97,7 @@ impl NetworkFilter {
             domains: None,
             cosmetic: CosmeticExceptions::default(),
             badfilter: false,
+            removeparam: None,
         };
 
         if let Some(options) = options_part {
@@ -151,7 +155,12 @@ impl NetworkFilter {
 
     fn finish(self) -> Result<Self, ParseError> {
         let matches_everything = self.regex.is_none() && self.pattern.is_empty();
-        if matches_everything && !self.exception && self.domains.is_none() && !self.badfilter {
+        if matches_everything
+            && !self.exception
+            && self.domains.is_none()
+            && !self.badfilter
+            && self.removeparam.is_none()
+        {
             // A bare `*` (optionally with type/party options) would block
             // broad swaths of the web; refuse it rather than trust the list.
             return Err(ParseError::Invalid("filter matches every URL"));
@@ -215,6 +224,12 @@ impl NetworkFilter {
                     }
                     cosmetic_only = false;
                 }
+                ("removeparam" | "queryprune", Some(v), false)
+                    if !self.exception && valid_param_name(v) =>
+                {
+                    self.removeparam = Some(v.into());
+                    cosmetic_only = false;
+                }
                 ("match-case", None, false) => self.match_case = true,
                 ("important", None, false) => self.important = true,
                 ("badfilter", None, false) => self.badfilter = true,
@@ -239,6 +254,11 @@ impl NetworkFilter {
             }
         }
 
+        if self.removeparam.is_some() && include_types == ResourceTypes::NONE {
+            // Tracking parameters mostly ride on navigations, so unlike
+            // blocking filters the default includes `document`.
+            include_types = ResourceTypes(ResourceTypes::ALL.0 & !ResourceType::Websocket.bit());
+        }
         if include_types != ResourceTypes::NONE {
             self.types = include_types;
             self.explicit_types = true;
@@ -260,7 +280,11 @@ impl NetworkFilter {
     /// If this filter blocks (or allows) an entire hostname and nothing more,
     /// returns that hostname. Such filters can be enforced at the DNS level.
     pub fn whole_hostname(&self) -> Option<&str> {
-        if self.anchor != Anchor::Hostname || self.regex.is_some() || self.badfilter {
+        if self.anchor != Anchor::Hostname
+            || self.regex.is_some()
+            || self.badfilter
+            || self.removeparam.is_some()
+        {
             return None;
         }
         if self.party.is_some() || self.domains.is_some() || self.cosmetic.any() {
@@ -291,7 +315,11 @@ impl NetworkFilter {
     /// Hostname-anchored filters whose host part contains a wildcard
     /// (`||ad*.example.com^`). Returned so the DNS layer can evaluate them.
     pub fn wildcard_hostname(&self) -> Option<&str> {
-        if self.anchor != Anchor::Hostname || self.regex.is_some() || self.badfilter {
+        if self.anchor != Anchor::Hostname
+            || self.regex.is_some()
+            || self.badfilter
+            || self.removeparam.is_some()
+        {
             return None;
         }
         if self.party.is_some()
@@ -375,6 +403,16 @@ impl NetworkFilter {
             format!("{pattern}${}", kept.join(","))
         }
     }
+}
+
+/// Literal query-parameter names only; regex forms (`/re/`) are skipped
+/// rather than approximated.
+fn valid_param_name(v: &str) -> bool {
+    !v.is_empty()
+        && v.len() <= 128
+        && v.bytes().all(|b| {
+            b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'~' | b'[' | b']')
+        })
 }
 
 fn split_raw_options(raw: &str) -> Option<(&str, &str)> {
@@ -664,6 +702,26 @@ mod tests {
         ));
         assert!(NetworkFilter::parse("||x.com^$csp=script-src 'none'").is_err());
         assert!(NetworkFilter::parse("/[/").is_err());
+    }
+
+    #[test]
+    fn parses_removeparam() {
+        let f = NetworkFilter::parse("$removeparam=utm_source").unwrap();
+        assert_eq!(f.removeparam.as_deref(), Some("utm_source"));
+        assert!(f.types.contains(ResourceType::Document));
+        assert!(f.whole_hostname().is_none());
+        let f = NetworkFilter::parse("||x.com^$removeparam=fbclid,image").unwrap();
+        assert_eq!(f.removeparam.as_deref(), Some("fbclid"));
+        for bad in [
+            "$removeparam",
+            "$removeparam=/^utm_/",
+            "@@||x.com^$removeparam=a",
+        ] {
+            assert!(
+                matches!(NetworkFilter::parse(bad), Err(ParseError::Unsupported(_))),
+                "{bad}"
+            );
+        }
     }
 
     #[test]
