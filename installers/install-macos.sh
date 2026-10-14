@@ -50,7 +50,7 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT INT TERM
 
 # --- 4. Obtain the binary and data files --------------------------------------
-SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd || echo "")"
+SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" 2>/dev/null && pwd || echo "")"
 SRC_ROOT=""
 if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/../Cargo.toml" ] && [ -d "$SCRIPT_DIR/../crates/adblock-cli" ]; then
     SRC_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"

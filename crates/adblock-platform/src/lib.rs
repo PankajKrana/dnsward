@@ -291,7 +291,7 @@ pub fn user_ids(name: &str) -> Option<(u32, u32)> {
 pub fn current() -> Box<dyn Platform> {
     #[cfg(target_os = "linux")]
     {
-        Box::new(linux::Linux::default())
+        Box::new(linux::Linux)
     }
     #[cfg(target_os = "macos")]
     {

@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-14, macos-13]
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-14, macos-15]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -56,14 +56,16 @@ jobs:
         run: ./installers/install.sh
       - name: Verify
         run: |
+          set -x
           adblock status
           adblock doctor || true
-          getent hosts doubleclick.net | grep -q '0.0.0.0'
-          getent hosts example.com
-          getent hosts adblock-probe.test | grep -q 127.0.0.209
+          # IPv4 only: `getent hosts` prefers IPv6 and would print `::` for a blocked name.
+          getent ahostsv4 doubleclick.net | grep -q '0.0.0.0'
+          getent ahostsv4 example.com
+          getent ahostsv4 adblock-probe.test | grep -q 127.0.0.209
           sudo adblock allow doubleclick.net
           sudo resolvectl flush-caches || true
-          ! getent hosts doubleclick.net | grep -q '0.0.0.0'
+          ! getent ahostsv4 doubleclick.net | grep -q '0.0.0.0'
       - name: Disable restores DNS
         run: |
           sudo adblock disable

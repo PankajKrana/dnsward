@@ -50,7 +50,9 @@ Linux)
              /usr/lib64/mozilla/native-messaging-hosts; do
         $SUDO rm -f "$d/com.adblock.native.json"
     done
-    id -u adblock >/dev/null 2>&1 && $SUDO userdel adblock 2>/dev/null || true
+    if id -u adblock >/dev/null 2>&1; then
+        $SUDO userdel adblock 2>/dev/null || true
+    fi
     ;;
 Darwin)
     $SUDO launchctl bootout system/com.adblock.daemon 2>/dev/null || true
