@@ -1,0 +1,58 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. **Do not paste secrets.** Logs can contain hostnames
+        you visited only if you enabled `privacy.log_blocked`; check before pasting.
+        Security problems: use the private report link instead of this form.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `fuck-ads --version`
+      placeholder: fuck-ads 0.2.0
+    validations: { required: true }
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [macOS (Apple silicon), macOS (Intel), Linux (x86_64), Linux (arm64), Other]
+    validations: { required: true }
+  - type: input
+    id: os
+    attributes:
+      label: OS version
+      placeholder: macOS 15.2 / Ubuntu 24.04
+    validations: { required: true }
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it?
+      options: [One-line installer, Homebrew, .deb, .rpm, Arch PKGBUILD, From source]
+    validations: { required: true }
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations: { required: true }
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+    validations: { required: true }
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `fuck-ads doctor`
+      render: shell
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log lines (`fuck-ads logs -n 100`)
+      render: shell

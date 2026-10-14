@@ -1,0 +1,28 @@
+name: Feature request
+description: Suggest an improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+    validations: { required: true }
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to happen?
+    validations: { required: true }
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+  - type: checkboxes
+    id: rules
+    attributes:
+      label: Project rules
+      description: Proposals that break these are unlikely to be accepted.
+      options:
+        - label: It needs no telemetry and stores no visited domains or URLs
+          required: true
+        - label: It needs no HTTPS interception or root certificates
+          required: true

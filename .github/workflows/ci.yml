@@ -4,48 +4,106 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: "17 3 * * 1"   # Mondays: new advisories and longer fuzzing
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+# A newer push to the same pull request replaces the older run; runs on main
+# always finish.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
   RUSTFLAGS: -D warnings
+  RUST_BACKTRACE: "1"
 
 jobs:
+  fmt:
+    name: formatting and docs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
+        with: { toolchain: stable, components: rustfmt }
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - run: cargo fmt --all --check
+      - run: cargo doc --workspace --no-deps --locked
+        env:
+          RUSTDOCFLAGS: -D warnings
+
   test:
     name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, ubuntu-24.04-arm, macos-14, macos-15]
-    runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo fmt --all --check
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
+        with: { toolchain: stable, components: clippy }
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      # Platform-specific code differs between Linux and macOS, so clippy runs
+      # on every OS.
       - run: cargo clippy --workspace --all-targets --locked
       - run: cargo test --workspace --locked
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Browser extension tests
-        run: |
-          for f in browser/common/*.js; do node --check "$f"; done
-          node --test "browser/tests/*.test.js"
-      - name: Shell scripts
-        run: for f in installers/*.sh packaging/*.sh packaging/deb/*.sh browser/build.sh; do sh -n "$f"; done
+
+  msrv:
+    name: minimum Rust version (1.88)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      RUSTFLAGS: ""   # an older compiler may not know newer lints
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
+        with: { toolchain: "1.88" }
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - run: cargo check --workspace --all-targets --locked
+
+  browser:
+    name: browser extension
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: 22 }
+      - run: for f in browser/common/*.js; do node --check "$f"; done
+      - run: node --test "browser/tests/*.test.js"
+
+  scripts:
+    name: shell scripts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - run: for f in installers/*.sh packaging/*.sh packaging/deb/*.sh browser/build.sh; do sh -n "$f"; done
+      - run: shellcheck -s sh installers/*.sh packaging/make-dist.sh packaging/deb/build-deb.sh browser/build.sh
 
   packages:
     name: build .deb and .rpm
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
+        with: { toolchain: stable }
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - run: cargo build --release --locked -p fuck-ads-cli
       - name: Archive
         run: packaging/make-dist.sh x86_64-unknown-linux-gnu target/release/fuck-ads dist
@@ -63,19 +121,16 @@ jobs:
           dpkg-deb -c dist/fuck-ads_0.0.0-ci_amd64.deb | grep -q 'usr/share/fuck-ads/chromium/manifest.json'
           rpm -qp --scripts dist/*/fuck-ads-*.rpm | grep -q systemctl
 
-  shellcheck:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - run: shellcheck -s sh installers/*.sh packaging/make-dist.sh packaging/deb/build-deb.sh browser/build.sh
-
   linux-install:
     name: install + enable on a systemd host
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
+        with: { toolchain: stable }
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - name: Install from source
         run: ./installers/install.sh
       - name: Verify
@@ -114,17 +169,63 @@ jobs:
 
   fuzz:
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
+        with: { toolchain: nightly }
       - run: cargo install cargo-fuzz --locked
-      - run: cd fuzz && cargo fuzz run parse_line -- -max_total_time=120
-      - run: cd fuzz && cargo fuzz run engine -- -max_total_time=120
+      # Short smoke run on every change; ten minutes per target on the weekly schedule.
+      - run: cd fuzz && cargo fuzz run parse_line -- -max_total_time=${{ github.event_name == 'schedule' && 600 || 120 }}
+      - run: cd fuzz && cargo fuzz run engine -- -max_total_time=${{ github.event_name == 'schedule' && 600 || 120 }}
 
   audit:
+    name: advisories (RustSec)
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      checks: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: rustsec/audit-check@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
+  deny:
+    name: licenses, bans, sources
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          command: check bans licenses sources
+
+  dependency-review:
+    name: dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+
+  # One stable name to require in branch protection: it passes only if every
+  # job above passed (skipped jobs are fine).
+  ci-ok:
+    name: CI passed
+    if: always()
+    needs: [fmt, test, msrv, browser, scripts, packages, linux-install, fuzz, audit, deny, dependency-review]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Fail if any job failed or was cancelled
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: exit 1

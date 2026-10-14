@@ -1,5 +1,9 @@
 # FuckAds
 
+[![CI](https://github.com/PankajKrana/fuck-ads/actions/workflows/ci.yml/badge.svg)](https://github.com/PankajKrana/fuck-ads/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/PankajKrana/fuck-ads)](https://github.com/PankajKrana/fuck-ads/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 System-wide ad and tracker blocking for **Linux** and **macOS**, with browser
 extensions for in-page filtering. Written in Rust.
 
@@ -367,18 +371,16 @@ See [docs/development.md](docs/development.md).
 ## Architecture
 
 ```text
-             fuck-ads (single binary)
-   ┌──────────────┬──────────────┬──────────────────┐
-   │ CLI          │ daemon       │ native-host      │
-   └──────┬───────┴──────┬───────┴────────┬─────────┘
-          │ control API (Unix socket, JSON)│
-   ┌──────┴──────────────┴─────────────────┴────────┐
-   │ fuck-ads-core: rules, updates, stats, control   │
-   ├──────────────┬───────────────┬─────────────────┤
-   │ fuck-ads-filter│ fuck-ads-dns  │ fuck-ads-stats   │  platform-independent
-   ├──────────────┴───────────────┴─────────────────┤
-   │ fuck-ads-platform: systemd/resolved | launchd/networksetup │
-   └────────────────────────────────────────────────┘
+fuck-ads (single binary): CLI | daemon | native-host
+                │  control API (Unix socket, JSON)
+┌────────────────┴─────────────────────────────────────────┐
+│ fuck-ads-core: rules, updates, stats, control            │
+├──────────────────────┬─────────────────┬─────────────────┤
+│ fuck-ads-filter      │ fuck-ads-dns    │ fuck-ads-stats  │
+├──────────────────────┴─────────────────┴─────────────────┤
+│ fuck-ads-platform: systemd | launchd (service + DNS)     │
+└──────────────────────────────────────────────────────────┘
+filter, dns and stats are platform-independent.
 ```
 
 See [docs/architecture.md](docs/architecture.md).
@@ -390,7 +392,24 @@ vulnerabilities as described in [SECURITY.md](SECURITY.md).
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+Contributions are welcome: bug reports, fixes, docs, tests and rules.
+
+```sh
+git clone https://github.com/PankajKrana/fuck-ads && cd fuck-ads
+cargo build --workspace
+cargo fmt --all --check && cargo clippy --workspace --all-targets && cargo test --workspace
+```
+
+- Read [CONTRIBUTING.md](CONTRIBUTING.md) first: ground rules (privacy first,
+  no HTTPS interception, never execute list content), setup, the pull-request
+  checklist and how releases are made.
+- Use the [issue forms](https://github.com/PankajKrana/fuck-ads/issues/new/choose)
+  for bugs and feature requests. Report security problems **privately**:
+  [SECURITY.md](SECURITY.md).
+- Everyone is expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+- CI runs formatting, clippy and tests on Linux (x86-64, arm64) and macOS,
+  a real install on a systemd host, package builds, fuzzing, and advisory and
+  license checks. See [docs/development.md](docs/development.md#cicd).
 
 ## License
 

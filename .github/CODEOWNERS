@@ -1,0 +1,12 @@
+# Every change needs a review from a code owner (enable "Require review from
+# Code Owners" in the branch protection rules).
+*                              @PankajKrana
+
+# Code that runs as root, changes system settings, or ships to users.
+/crates/fuck-ads-platform/     @PankajKrana
+/installers/                   @PankajKrana
+/packaging/                    @PankajKrana
+/platforms/                    @PankajKrana
+/.github/                      @PankajKrana
+/SECURITY.md                   @PankajKrana
+/docs/security.md              @PankajKrana
