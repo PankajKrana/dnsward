@@ -4,7 +4,7 @@
 set -eu
 BIN="$1"; VERSION="$2"; ARCH="$3"; OUT="${4:-dist}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-PKG="$(mktemp -d)/fuck_ads_${VERSION}_${ARCH}"
+PKG="$(mktemp -d)/fuck-ads_${VERSION}_${ARCH}"
 trap 'rm -rf "$(dirname "$PKG")"' EXIT
 mkdir -p "$PKG/DEBIAN" "$PKG/usr/bin" "$PKG/usr/share/fuck-ads/filters" "$PKG/lib/systemd/system" \
          "$PKG/etc/fuck-ads" "$PKG/usr/share/doc/fuck-ads"
@@ -20,4 +20,4 @@ sed -e "s/@VERSION@/$VERSION/" -e "s/@ARCH@/$ARCH/" "$ROOT/packaging/deb/control
 echo "/etc/fuck-ads/config.toml" > "$PKG/DEBIAN/conffiles"
 for s in postinst prerm postrm; do install -m 0755 "$ROOT/packaging/deb/$s" "$PKG/DEBIAN/$s"; done
 mkdir -p "$OUT"
-dpkg-deb --root-owner-group --build "$PKG" "$OUT/fuck_ads_${VERSION}_${ARCH}.deb"
+dpkg-deb --root-owner-group --build "$PKG" "$OUT/fuck-ads_${VERSION}_${ARCH}.deb"

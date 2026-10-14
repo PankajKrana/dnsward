@@ -60,7 +60,7 @@ jobs:
           rpm -qpl dist/*/fuck-ads-*.rpm
           rpm -qpl dist/*/fuck-ads-*.rpm | grep -q '/usr/share/fuck-ads/chromium/manifest.json'
           rpm -qpl dist/*/fuck-ads-*.rpm | grep -q '/usr/share/fuck-ads/firefox/manifest.json'
-          dpkg-deb -c dist/fuck_ads_0.0.0-ci_amd64.deb | grep -q 'usr/share/fuck-ads/chromium/manifest.json'
+          dpkg-deb -c dist/fuck-ads_0.0.0-ci_amd64.deb | grep -q 'usr/share/fuck-ads/chromium/manifest.json'
           rpm -qp --scripts dist/*/fuck-ads-*.rpm | grep -q systemctl
 
   shellcheck:
