@@ -16,6 +16,9 @@
   ],
   "optional_permissions": ["userScripts"],
   "host_permissions": ["<all_urls>"],
+  "web_accessible_resources": [
+    { "resources": ["resources/*"], "matches": ["<all_urls>"] }
+  ],
   "background": { "scripts": ["scriptlets.js", "background.js"] },
   "content_scripts": [
     {

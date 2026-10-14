@@ -105,6 +105,18 @@ fn network_condition(f: &NetworkFilter, types: ResourceTypes) -> Option<Value> {
     Some(Value::Object(cond))
 }
 
+/// The DNR action for a blocking filter: plain `block`, or a redirect to a
+/// packaged stub resource for `$redirect` filters.
+fn block_action(f: &NetworkFilter) -> Value {
+    match f.redirect {
+        Some(file) => json!({
+            "type": "redirect",
+            "redirect": { "extensionPath": format!("/resources/{file}") }
+        }),
+        None => json!({ "type": "block" }),
+    }
+}
+
 struct RuleSink {
     rules: Vec<Value>,
     max: usize,
@@ -206,7 +218,7 @@ pub fn dnr_rules(engine: &Engine, user: &UserOverrides<'_>, max_rules: usize) ->
             let action = if f.exception {
                 allow.clone()
             } else {
-                block.clone()
+                block_action(f)
             };
             sink.push(prio, action, cond);
         }
@@ -215,7 +227,7 @@ pub fn dnr_rules(engine: &Engine, user: &UserOverrides<'_>, max_rules: usize) ->
     sink.push_domains(priority::BLOCK, block.clone(), engine.blocked_host_list());
     for f in deferred_blocks {
         if let Some(cond) = network_condition(f, f.types)
-            && !sink.push(priority::BLOCK, block.clone(), cond)
+            && !sink.push(priority::BLOCK, block_action(f), cond)
         {
             break;
         }
@@ -361,6 +373,11 @@ pub fn safari_content_blocker(
         }));
     }
     for (f, _) in engine.network_filters() {
+        // Safari cannot serve a stand-in resource; blocking instead could
+        // break the page, so redirect filters are left out.
+        if f.redirect.is_some() {
+            continue;
+        }
         if let Some(trigger) = safari_trigger(f) {
             let rule = json!({
                 "trigger": trigger,
@@ -425,6 +442,7 @@ pub fn safari_content_blocker(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::request::Request;
 
     #[test]
     fn dnr_conversion() {
@@ -452,6 +470,34 @@ mod tests {
             assert_eq!(r["id"], i + 1);
         }
         assert!(dnr_rules(&engine, &UserOverrides::default(), 2).len() <= 2);
+    }
+
+    #[test]
+    fn dnr_redirect() {
+        let engine = Engine::from_rules(
+            "||t.example/ads.js^$script,redirect=noop.js\n||t.example/i^$important,image,redirect=1x1.gif\n",
+        );
+        let rules = dnr_rules(&engine, &UserOverrides::default(), 100);
+        let paths: Vec<_> = rules
+            .iter()
+            .map(|r| r["action"]["redirect"]["extensionPath"].as_str())
+            .collect();
+        assert!(paths.contains(&Some("/resources/noop.js")));
+        assert!(paths.contains(&Some("/resources/1x1.gif")));
+        assert!(rules.iter().all(|r| r["action"]["type"] == "redirect"));
+        // Redirects are still blocks for URL checks.
+        let req = Request::new(
+            "https://t.example/ads.js",
+            Some("https://a.example/"),
+            ResourceType::Script,
+        )
+        .unwrap();
+        assert!(engine.check_request(&req).is_blocked());
+        assert!(
+            safari_content_blocker(&engine, &UserOverrides::default(), 1000)
+                .iter()
+                .all(|r| !r.to_string().contains("ads\\\\.js"))
+        );
     }
 
     #[test]

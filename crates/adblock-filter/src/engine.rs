@@ -1102,7 +1102,7 @@ m.youtube.com#@#+js(json-prune, adPlacements)
         let s = b.add_list(
             "x",
             Category::Ads,
-            "||ok.example^\n*\n||x^$redirect=noop.js\n! c\n",
+            "||ok.example^\n*\n||x^$redirect-rule=noop.js\n! c\n",
             ListFormat::Auto,
         );
         assert_eq!(s.network, 1);

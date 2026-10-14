@@ -63,6 +63,9 @@ pub struct NetworkFilter {
     /// `$removeparam=name`: instead of blocking, strip this query parameter
     /// from matching requests.
     pub removeparam: Option<Box<str>>,
+    /// `$redirect=name`: block the request and serve this packaged resource
+    /// (file name under `resources/`) instead.
+    pub redirect: Option<&'static str>,
 }
 
 /// Size limit for compiled regex filters; keeps hostile lists from consuming
@@ -98,6 +101,7 @@ impl NetworkFilter {
             cosmetic: CosmeticExceptions::default(),
             badfilter: false,
             removeparam: None,
+            redirect: None,
         };
 
         if let Some(options) = options_part {
@@ -230,6 +234,13 @@ impl NetworkFilter {
                     self.removeparam = Some(v.into());
                     cosmetic_only = false;
                 }
+                ("redirect", Some(v), false) if !self.exception => {
+                    self.redirect = Some(
+                        crate::resources::lookup(v)
+                            .ok_or(ParseError::Unsupported("unknown redirect resource"))?,
+                    );
+                    cosmetic_only = false;
+                }
                 ("match-case", None, false) => self.match_case = true,
                 ("important", None, false) => self.important = true,
                 ("badfilter", None, false) => self.badfilter = true,
@@ -259,6 +270,10 @@ impl NetworkFilter {
             // blocking filters the default includes `document`.
             include_types = ResourceTypes(ResourceTypes::ALL.0 & !ResourceType::Websocket.bit());
         }
+        if self.redirect.is_some() {
+            // Replacing a page with a stub would break navigation.
+            include_types = ResourceTypes(include_types.0 & !ResourceType::Document.bit());
+        }
         if include_types != ResourceTypes::NONE {
             self.types = include_types;
             self.explicit_types = true;
@@ -284,6 +299,7 @@ impl NetworkFilter {
             || self.regex.is_some()
             || self.badfilter
             || self.removeparam.is_some()
+            || self.redirect.is_some()
         {
             return None;
         }
@@ -319,6 +335,7 @@ impl NetworkFilter {
             || self.regex.is_some()
             || self.badfilter
             || self.removeparam.is_some()
+            || self.redirect.is_some()
         {
             return None;
         }
@@ -697,11 +714,34 @@ mod tests {
             Err(ParseError::Invalid(_))
         ));
         assert!(matches!(
-            NetworkFilter::parse("||x.com^$redirect=noop.js"),
+            NetworkFilter::parse("||x.com^$redirect=google-analytics.js"),
+            Err(ParseError::Unsupported(_))
+        ));
+        assert!(matches!(
+            NetworkFilter::parse("||x.com^$redirect-rule=noop.js"),
+            Err(ParseError::Unsupported(_))
+        ));
+        assert!(matches!(
+            NetworkFilter::parse("@@||x.com^$redirect=noop.js"),
             Err(ParseError::Unsupported(_))
         ));
         assert!(NetworkFilter::parse("||x.com^$csp=script-src 'none'").is_err());
         assert!(NetworkFilter::parse("/[/").is_err());
+    }
+
+    #[test]
+    fn parses_redirect() {
+        let f = NetworkFilter::parse("||x.com/ads.js^$script,redirect=noopjs").unwrap();
+        assert_eq!(f.redirect, Some("noop.js"));
+        assert!(!f.exception);
+        // Not a DNS-level rule: the page needs the stub, not a dead host.
+        assert!(f.whole_hostname().is_none());
+        let f = NetworkFilter::parse("||x.com^$redirect=1x1.gif").unwrap();
+        assert!(f.whole_hostname().is_none());
+        assert!(f.wildcard_hostname().is_none());
+        assert!(!f.types.contains(ResourceType::Document));
+        let f = NetworkFilter::parse("||x.com^$all,redirect=noop.html").unwrap();
+        assert!(!f.types.contains(ResourceType::Document));
     }
 
     #[test]

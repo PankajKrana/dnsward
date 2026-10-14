@@ -61,6 +61,17 @@ and swap the Unix socket for a named pipe in `adblock-core::control`.
   `queryTransform`, so they only run when nothing blocks or allows the
   request. Safari's content blocker cannot rewrite URLs, so they are
   not exported there.
+* **Redirects.** `$redirect=noop.js` (also `noop.css`, `noop.html`,
+  `noop.txt`, `1x1.gif`, `2x2.png` and their uBO/ABP aliases) blocks the
+  request and serves a neutral stub packaged in
+  `browser/common/resources/`, so pages that expect the file keep working.
+  Only names in `adblock_filter::resources` are accepted; unknown names,
+  `$redirect-rule` and exception forms are skipped. Redirect filters never
+  apply to top-level documents and are kept out of the DNS layer (the page
+  needs the stub, not a dead host). The DNR export emits a `redirect` rule
+  with an `extensionPath`; Safari cannot do this, so they are not exported
+  there. The stubs are listed in `web_accessible_resources`, which lets a
+  page detect that the extension is installed.
 * **Export.** Rules are converted to Chromium/Firefox `declarativeNetRequest`
   rules. Plain hostnames are packed into `requestDomains` rules, so tens of
   thousands of hostnames take only a few dozen of the 30,000 available

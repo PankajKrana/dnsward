@@ -6,7 +6,8 @@
 //! * hosts files and plain domain lists
 //! * Adblock Plus / uBlock Origin network filters (`||host^`, `|`, `*`, `^`,
 //!   regex, `@@` exceptions, `$third-party`, `$domain=`, resource types,
-//!   `$important`, `$match-case`, `$badfilter`, `$elemhide`/`$generichide`)
+//!   `$important`, `$match-case`, `$badfilter`, `$elemhide`/`$generichide`,
+//!   `$removeparam=name`, `$redirect=` to packaged neutral resources)
 //! * cosmetic filters (`##`, `#@#`, entity hostnames, standard CSS in `#?#`)
 //! * scriptlet filters (`##+js(...)`) referencing built-in scriptlets by name
 //!
@@ -20,6 +21,7 @@ pub mod export;
 pub mod network;
 pub mod parser;
 pub mod request;
+pub mod resources;
 
 pub use engine::{
     Category, CosmeticResult, Engine, EngineBuilder, HostVerdict, ListIndex, ListInfo, ListStats,
